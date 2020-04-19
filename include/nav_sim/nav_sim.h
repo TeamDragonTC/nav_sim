@@ -1,21 +1,34 @@
 #ifndef _NAV_SIM_H_
 #define _NAV_SIM_H_
 
+#include <random>
+
 #include <geometry_msgs/PoseStamped.h>
 #include <geometry_msgs/PoseWithCovarianceStamped.h>
 #include <geometry_msgs/Twist.h>
 #include <ros/ros.h>
+#include <tf2/LinearMath/Quaternion.h>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.h>
+#include <tf2_ros/static_transform_broadcaster.h>
+#include <tf2_ros/transform_broadcaster.h>
 
 class NavSim {
 public:
-  NavSim() : nh_(), pnh_("~") { initialize(); }
+  NavSim() : nh_(), pnh_("~"), v_(0.0), w_(0.0), yaw_(0.0) { initialize(); }
   ~NavSim();
 
   void initialize();
 
-  void update_pose(geometry_msgs::Pose pose);
-  void calc_velocity();
+  void run() {
+    ros::Rate rate(10);
+    while (ros::ok()) {
+      update_pose();
+      publish_state();
+    }
+  }
+  void update_pose();
   void publish_state();
+  void plan_velocity();
 
   void callback_cmd_vel(const geometry_msgs::Twist &msg) { cmd_vel_ = msg; }
   void callback_initialpose(
@@ -24,6 +37,10 @@ public:
 private:
   ros::NodeHandle nh_;
   ros::NodeHandle pnh_;
+
+  double previous_time_;
+  double v_, w_;
+  double yaw_;
 
   geometry_msgs::Twist cmd_vel_;
   geometry_msgs::PoseStamped current_pose_;
