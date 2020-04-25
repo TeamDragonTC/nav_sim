@@ -13,15 +13,23 @@
 #include <tf2_ros/static_transform_broadcaster.h>
 #include <tf2_ros/transform_broadcaster.h>
 
+struct State {
+  double x;
+  double y;
+  double yaw;
+  State() : x(0.0), y(0.0), yaw(0.0) {}
+};
+
 class NavSim {
 public:
-  NavSim() : nh_(), pnh_("~"), v_(0.0), w_(0.0), yaw_(0.0) { initialize(); }
+  NavSim() : nh_(), pnh_("~"), v_(0.0), w_(0.0), { initialize(); }
   ~NavSim() {}
 
   void initialize();
   void run();
   void update_pose();
-  void sim_transfer_error(geometry_msgs::PoseStamped &pose);
+  void convert_to_pose(geometry_msgs::PoseStamped &pose, State state);
+  void sim_transfer_error(State &state);
   void publish_pose_to_transform(geometry_msgs::PoseStamped pose,
                                  std::string frame);
   void plan_velocity(double &target_v, double &target_w);
@@ -36,13 +44,13 @@ public:
   }
 
 private:
+  State state_;
   ros::NodeHandle nh_;
   ros::NodeHandle pnh_;
 
   double error_coeff_;
   double previous_time_;
   double v_, w_;
-  double yaw_;
 
   std::mutex m_;
 

@@ -1,5 +1,5 @@
 <launch>
-  <arg name="error_coeff" default="0.01"/>
+  <arg name="error_coeff" default="0.0002"/>
 
   <node name="world_to_map" pkg="tf2_ros" type="static_transform_publisher" args="0 0 0 0 0 0 world map"/>
 
