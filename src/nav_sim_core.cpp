@@ -29,36 +29,53 @@ void NavSim::plan_velocity(double &target_v, double &target_w) {
   target_w = 1.0 * (cmd_vel_.angular.z - w_);
 }
 
-void NavSim::sim_transfer_error(geometry_msgs::PoseStamped &pose) {}
+void NavSim::convert_to_pose(geometry_msgs::PoseStamped &pose, State state) {
+  pose.pose.position.x = state.x;
+  pose.pose.position.y = state.y;
+  pose.pose.position.z = 0.0;
+  tf2::Quaternion quat;
+  quat.setRPY(0.0, 0.0, state.yaw);
+  pose.pose.orientation.w = quat.w();
+  pose.pose.orientation.x = quat.x();
+  pose.pose.orientation.y = quat.y();
+  pose.pose.orientation.z = quat.z();
+}
+
+void NavSim::sim_transfer_error(State &state) {
+  std::random_device seed;
+  std::default_random_engine engine(seed());
+  std::normal_distribution<> dist(0.0, 1.0);
+
+  state.x += (error_coeff_)*dist(engine);
+  state.y += (error_coeff_)*dist(engine);
+  state.yaw += (error_coeff_)*dist(engine);
+}
 
 void NavSim::update_pose() {
   const double current_time = ros::Time::now().toSec();
   const double sampling_time = current_time - previous_time_;
 
+  // calculate velocity using p control.
   double plan_v, plan_w;
   plan_velocity(plan_v, plan_w);
 
-  yaw_ = yaw_ + w_ * sampling_time;
+  // calculate next robot pose from target velocity
+  state_.yaw += w_ * sampling_time;
+  state_.x += v_ * std::cos(state_.yaw) * sampling_time;
+  state_.y += v_ * std::sin(state_.yaw) * sampling_time;
 
+  // add error by normal distribution
+  sim_transfer_error(state_);
+
+  // convert State to geometry_msgs::PoseStamped
   current_pose_.header.stamp = ros::Time::now();
   current_pose_.header.frame_id = "base_link";
-  current_pose_.pose.position.x =
-      current_pose_.pose.position.x + v_ * std::cos(yaw_) * sampling_time;
-  current_pose_.pose.position.y =
-      current_pose_.pose.position.y + v_ * std::sin(yaw_) * sampling_time;
-  current_pose_.pose.position.z = 0.0;
-  tf2::Quaternion quat;
-  quat.setRPY(0.0, 0.0, yaw_);
-  current_pose_.pose.orientation.w = quat.w();
-  current_pose_.pose.orientation.x = quat.x();
-  current_pose_.pose.orientation.y = quat.y();
-  current_pose_.pose.orientation.z = quat.z();
+  convert_to_pose(current_pose_, state_);
 
+  // update velocity
   v_ += (plan_v * sampling_time);
   w_ += (plan_w * sampling_time);
 
-  // add normaol distribution error
-  sim_transfer_error(current_pose_);
   // publish tf (covert pose stamped to transform stamped).
   publish_pose_to_transform(current_pose_, "base_link");
   // publish current pose;
