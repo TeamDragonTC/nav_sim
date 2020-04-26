@@ -22,7 +22,7 @@ struct State {
 
 class NavSim {
 public:
-  NavSim() : nh_(), pnh_("~"), v_(0.0), w_(0.0), { initialize(); }
+  NavSim() : nh_(), pnh_("~"), v_(0.0), w_(0.0) { initialize(); }
   ~NavSim() {}
 
   void initialize();
@@ -39,9 +39,7 @@ public:
     cmd_vel_ = msg;
   }
   void callback_initialpose(
-      const geometry_msgs::PoseWithCovarianceStamped &msg) {
-    std::lock_guard<std::mutex> lock(m_);
-  }
+      const geometry_msgs::PoseWithCovarianceStamped &msg);
 
 private:
   State state_;
