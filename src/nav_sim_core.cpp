@@ -29,6 +29,20 @@ void NavSim::plan_velocity(double &target_v, double &target_w) {
   target_w = 1.0 * (cmd_vel_.angular.z - w_);
 }
 
+void NavSim::callback_initialpose(
+    const geometry_msgs::PoseWithCovarianceStamped &msg) {
+  std::lock_guard<std::mutex> lock(m_);
+  state_.x = msg.pose.pose.position.x;
+  state_.y = msg.pose.pose.position.y;
+  tf2::Quaternion quat(msg.pose.pose.orientation.x, msg.pose.pose.orientation.y,
+                       msg.pose.pose.orientation.z,
+                       msg.pose.pose.orientation.w);
+  tf2::Matrix3x3 mat(quat);
+  double roll, pitch, yaw;
+  mat.getRPY(roll, pitch, yaw);
+  state_.yaw = yaw;
+}
+
 void NavSim::convert_to_pose(geometry_msgs::PoseStamped &pose, State state) {
   pose.pose.position.x = state.x;
   pose.pose.position.y = state.y;
