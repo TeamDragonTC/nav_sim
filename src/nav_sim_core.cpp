@@ -1,17 +1,17 @@
 #include <nav_sim/nav_sim.h>
 
-void NavSim::initialize() {
+void NavSim::initialize()
+{
   pnh_.param<double>("error_coeff", error_coeff_, 0.01);
 
-  currnet_pose_pub_ =
-      pnh_.advertise<geometry_msgs::PoseStamped>("/current_pose", 10);
+  currnet_pose_pub_ = pnh_.advertise<geometry_msgs::PoseStamped>("/current_pose", 10);
 
   cmd_vel_sub_ = pnh_.subscribe("/cmd_vel", 1, &NavSim::callback_cmd_vel, this);
-  initialpose_sub_ =
-      pnh_.subscribe("/initialpose", 1, &NavSim::callback_initialpose, this);
+  initialpose_sub_ = pnh_.subscribe("/initialpose", 1, &NavSim::callback_initialpose, this);
 }
 
-void NavSim::run() {
+void NavSim::run()
+{
   ros::AsyncSpinner spinner(1);
   spinner.start();
   ros::Rate rate(100);
@@ -24,26 +24,28 @@ void NavSim::run() {
   }
 }
 
-void NavSim::plan_velocity(double &target_v, double &target_w) {
+void NavSim::plan_velocity(double & target_v, double & target_w)
+{
   target_v = 1.0 * (cmd_vel_.linear.x - v_);
   target_w = 1.0 * (cmd_vel_.angular.z - w_);
 }
 
-void NavSim::callback_initialpose(
-    const geometry_msgs::PoseWithCovarianceStamped &msg) {
+void NavSim::callback_initialpose(const geometry_msgs::PoseWithCovarianceStamped & msg)
+{
   std::lock_guard<std::mutex> lock(m_);
   state_.x = msg.pose.pose.position.x;
   state_.y = msg.pose.pose.position.y;
-  tf2::Quaternion quat(msg.pose.pose.orientation.x, msg.pose.pose.orientation.y,
-                       msg.pose.pose.orientation.z,
-                       msg.pose.pose.orientation.w);
+  tf2::Quaternion quat(
+    msg.pose.pose.orientation.x, msg.pose.pose.orientation.y, msg.pose.pose.orientation.z,
+    msg.pose.pose.orientation.w);
   tf2::Matrix3x3 mat(quat);
   double roll, pitch, yaw;
   mat.getRPY(roll, pitch, yaw);
   state_.yaw = yaw;
 }
 
-void NavSim::convert_to_pose(geometry_msgs::PoseStamped &pose, State state) {
+void NavSim::convert_to_pose(geometry_msgs::PoseStamped & pose, State state)
+{
   pose.pose.position.x = state.x;
   pose.pose.position.y = state.y;
   pose.pose.position.z = 0.0;
@@ -55,7 +57,8 @@ void NavSim::convert_to_pose(geometry_msgs::PoseStamped &pose, State state) {
   pose.pose.orientation.z = quat.z();
 }
 
-void NavSim::sim_transfer_error(State &state) {
+void NavSim::sim_transfer_error(State & state)
+{
   std::random_device seed;
   std::default_random_engine engine(seed());
   std::normal_distribution<> dist(0.0, 1.0);
@@ -65,7 +68,8 @@ void NavSim::sim_transfer_error(State &state) {
   state.yaw += (error_coeff_)*dist(engine);
 }
 
-void NavSim::update_pose() {
+void NavSim::update_pose()
+{
   const double current_time = ros::Time::now().toSec();
   const double sampling_time = current_time - previous_time_;
 
@@ -98,8 +102,8 @@ void NavSim::update_pose() {
   previous_time_ = current_time;
 }
 
-void NavSim::publish_pose_to_transform(geometry_msgs::PoseStamped pose,
-                                       std::string frame) {
+void NavSim::publish_pose_to_transform(geometry_msgs::PoseStamped pose, std::string frame)
+{
   static tf2_ros::TransformBroadcaster base_link_broadcaster;
   geometry_msgs::TransformStamped base_link_transform;
 

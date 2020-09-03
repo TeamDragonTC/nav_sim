@@ -13,14 +13,16 @@
 #include <tf2_ros/static_transform_broadcaster.h>
 #include <tf2_ros/transform_broadcaster.h>
 
-struct State {
+struct State
+{
   double x;
   double y;
   double yaw;
   State() : x(0.0), y(0.0), yaw(0.0) {}
 };
 
-class NavSim {
+class NavSim
+{
 public:
   NavSim() : nh_(), pnh_("~"), v_(0.0), w_(0.0) { initialize(); }
   ~NavSim() {}
@@ -28,18 +30,17 @@ public:
   void initialize();
   void run();
   void update_pose();
-  void convert_to_pose(geometry_msgs::PoseStamped &pose, State state);
-  void sim_transfer_error(State &state);
-  void publish_pose_to_transform(geometry_msgs::PoseStamped pose,
-                                 std::string frame);
-  void plan_velocity(double &target_v, double &target_w);
+  void convert_to_pose(geometry_msgs::PoseStamped & pose, State state);
+  void sim_transfer_error(State & state);
+  void publish_pose_to_transform(geometry_msgs::PoseStamped pose, std::string frame);
+  void plan_velocity(double & target_v, double & target_w);
 
-  void callback_cmd_vel(const geometry_msgs::Twist &msg) {
+  void callback_cmd_vel(const geometry_msgs::Twist & msg)
+  {
     std::lock_guard<std::mutex> lock(m_);
     cmd_vel_ = msg;
   }
-  void callback_initialpose(
-      const geometry_msgs::PoseWithCovarianceStamped &msg);
+  void callback_initialpose(const geometry_msgs::PoseWithCovarianceStamped & msg);
 
 private:
   State state_;
