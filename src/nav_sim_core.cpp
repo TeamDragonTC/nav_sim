@@ -9,6 +9,10 @@ void NavSim::initialize()
   cmd_vel_sub_ = pnh_.subscribe("/cmd_vel", 1, &NavSim::callbackCmdVel, this);
   initialpose_sub_ = pnh_.subscribe("/initialpose", 1, &NavSim::callbackInitialpose, this);
 
+  landmark_pose_list_.push_back(State(2.0, 0.0, 0.0));
+  landmark_pose_list_.push_back(State(0.0, 2.0, 0.0));
+  landmark_pose_list_.push_back(State(0.0,-2.0, 0.0));
+
   timer_ = nh_.createTimer(ros::Duration(0.01), &NavSim::timerCallback, this);
 }
 
@@ -23,9 +27,9 @@ void NavSim::timerCallback(const ros::TimerEvent& e)
   planVelocity(plan_v, plan_w);
 
   // calculate next robot pose from target velocity
-  state_.yaw += w_ * sampling_time;
-  state_.x += v_ * std::cos(state_.yaw) * sampling_time;
-  state_.y += v_ * std::sin(state_.yaw) * sampling_time;
+  state_.yaw_ += w_ * sampling_time;
+  state_.x_ += v_ * std::cos(state_.yaw_) * sampling_time;
+  state_.y_ += v_ * std::sin(state_.yaw_) * sampling_time;
 
   // add error by normal distribution
   simTransferError(state_);
@@ -41,6 +45,14 @@ void NavSim::timerCallback(const ros::TimerEvent& e)
 
   // publish tf (covert pose stamped to transform stamped).
   publishPoseToTransform(current_pose_, "base_link");
+  // publish landmark pose
+  int landmark_id = 0;
+  for(auto landmark : landmark_pose_list_) {
+    landmark_id++;
+    geometry_msgs::PoseStamped landmark_pose;
+    convertToPose(landmark_pose, landmark);
+    publishPoseToTransform(landmark_pose, "landmark"+std::to_string(landmark_id));
+  }
   // publish current pose;
   currnet_pose_pub_.publish(current_pose_);
 
@@ -56,24 +68,24 @@ void NavSim::planVelocity(double & target_v, double & target_w)
 void NavSim::callbackInitialpose(const geometry_msgs::PoseWithCovarianceStamped & msg)
 {
   std::lock_guard<std::mutex> lock(m_);
-  state_.x = msg.pose.pose.position.x;
-  state_.y = msg.pose.pose.position.y;
+  state_.x_ = msg.pose.pose.position.x;
+  state_.y_ = msg.pose.pose.position.y;
   tf2::Quaternion quat(
     msg.pose.pose.orientation.x, msg.pose.pose.orientation.y, msg.pose.pose.orientation.z,
     msg.pose.pose.orientation.w);
   tf2::Matrix3x3 mat(quat);
   double roll, pitch, yaw;
   mat.getRPY(roll, pitch, yaw);
-  state_.yaw = yaw;
+  state_.yaw_ = yaw;
 }
 
 void NavSim::convertToPose(geometry_msgs::PoseStamped & pose, State state)
 {
-  pose.pose.position.x = state.x;
-  pose.pose.position.y = state.y;
+  pose.pose.position.x = state.x_;
+  pose.pose.position.y = state.y_;
   pose.pose.position.z = 0.0;
   tf2::Quaternion quat;
-  quat.setRPY(0.0, 0.0, state.yaw);
+  quat.setRPY(0.0, 0.0, state.yaw_);
   pose.pose.orientation.w = quat.w();
   pose.pose.orientation.x = quat.x();
   pose.pose.orientation.y = quat.y();
@@ -86,9 +98,9 @@ void NavSim::simTransferError(State & state)
   std::default_random_engine engine(seed());
   std::normal_distribution<> dist(0.0, 1.0);
 
-  state.x += (error_coeff_)*dist(engine);
-  state.y += (error_coeff_)*dist(engine);
-  state.yaw += (error_coeff_)*dist(engine);
+  state.x_ += (error_coeff_)*dist(engine);
+  state.y_ += (error_coeff_)*dist(engine);
+  state.yaw_ += (error_coeff_)*dist(engine);
 }
 
 void NavSim::publishPoseToTransform(geometry_msgs::PoseStamped pose, std::string frame)

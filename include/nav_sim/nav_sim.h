@@ -15,10 +15,11 @@
 
 struct State
 {
-  double x;
-  double y;
-  double yaw;
-  State() : x(0.0), y(0.0), yaw(0.0) {}
+  double x_;
+  double y_;
+  double yaw_;
+  State() : x_(0.0), y_(0.0), yaw_(0.0) {}
+  State(double x, double y, double yaw) : x_(x), y_(y), yaw_(yaw) {}
 };
 
 class NavSim
