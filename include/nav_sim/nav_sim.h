@@ -29,18 +29,18 @@ public:
 
   void initialize();
   void run();
-  void update_pose();
-  void convert_to_pose(geometry_msgs::PoseStamped & pose, State state);
-  void sim_transfer_error(State & state);
-  void publish_pose_to_transform(geometry_msgs::PoseStamped pose, std::string frame);
-  void plan_velocity(double & target_v, double & target_w);
+  void updatePose();
+  void convertToPose(geometry_msgs::PoseStamped & pose, State state);
+  void simTransferError(State & state);
+  void publishPoseToTransform(geometry_msgs::PoseStamped pose, std::string frame);
+  void planVelocity(double & target_v, double & target_w);
 
-  void callback_cmd_vel(const geometry_msgs::Twist & msg)
+  void callbackCmdVel(const geometry_msgs::Twist & msg)
   {
     std::lock_guard<std::mutex> lock(m_);
     cmd_vel_ = msg;
   }
-  void callback_initialpose(const geometry_msgs::PoseWithCovarianceStamped & msg);
+  void callbackInitialpose(const geometry_msgs::PoseWithCovarianceStamped & msg);
 
 private:
   State state_;
@@ -52,6 +52,8 @@ private:
   double v_, w_;
 
   std::mutex m_;
+
+  std::vector<State> landmark_pose_list_;
 
   geometry_msgs::Twist cmd_vel_;
   geometry_msgs::PoseStamped current_pose_;

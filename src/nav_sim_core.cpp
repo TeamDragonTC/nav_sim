@@ -6,8 +6,8 @@ void NavSim::initialize()
 
   currnet_pose_pub_ = pnh_.advertise<geometry_msgs::PoseStamped>("/current_pose", 10);
 
-  cmd_vel_sub_ = pnh_.subscribe("/cmd_vel", 1, &NavSim::callback_cmd_vel, this);
-  initialpose_sub_ = pnh_.subscribe("/initialpose", 1, &NavSim::callback_initialpose, this);
+  cmd_vel_sub_ = pnh_.subscribe("/cmd_vel", 1, &NavSim::callbackCmdVel, this);
+  initialpose_sub_ = pnh_.subscribe("/initialpose", 1, &NavSim::callbackInitialpose, this);
 }
 
 void NavSim::run()
@@ -18,19 +18,19 @@ void NavSim::run()
   while (ros::ok()) {
     {
       std::lock_guard<std::mutex> lock(m_);
-      update_pose();
+      updatePose();
     }
     rate.sleep();
   }
 }
 
-void NavSim::plan_velocity(double & target_v, double & target_w)
+void NavSim::planVelocity(double & target_v, double & target_w)
 {
   target_v = 1.0 * (cmd_vel_.linear.x - v_);
   target_w = 1.0 * (cmd_vel_.angular.z - w_);
 }
 
-void NavSim::callback_initialpose(const geometry_msgs::PoseWithCovarianceStamped & msg)
+void NavSim::callbackInitialpose(const geometry_msgs::PoseWithCovarianceStamped & msg)
 {
   std::lock_guard<std::mutex> lock(m_);
   state_.x = msg.pose.pose.position.x;
@@ -44,7 +44,7 @@ void NavSim::callback_initialpose(const geometry_msgs::PoseWithCovarianceStamped
   state_.yaw = yaw;
 }
 
-void NavSim::convert_to_pose(geometry_msgs::PoseStamped & pose, State state)
+void NavSim::convertToPose(geometry_msgs::PoseStamped & pose, State state)
 {
   pose.pose.position.x = state.x;
   pose.pose.position.y = state.y;
@@ -57,7 +57,7 @@ void NavSim::convert_to_pose(geometry_msgs::PoseStamped & pose, State state)
   pose.pose.orientation.z = quat.z();
 }
 
-void NavSim::sim_transfer_error(State & state)
+void NavSim::simTransferError(State & state)
 {
   std::random_device seed;
   std::default_random_engine engine(seed());
@@ -68,14 +68,14 @@ void NavSim::sim_transfer_error(State & state)
   state.yaw += (error_coeff_)*dist(engine);
 }
 
-void NavSim::update_pose()
+void NavSim::updatePose()
 {
   const double current_time = ros::Time::now().toSec();
   const double sampling_time = current_time - previous_time_;
 
   // calculate velocity using p control.
   double plan_v, plan_w;
-  plan_velocity(plan_v, plan_w);
+  planVelocity(plan_v, plan_w);
 
   // calculate next robot pose from target velocity
   state_.yaw += w_ * sampling_time;
@@ -83,26 +83,26 @@ void NavSim::update_pose()
   state_.y += v_ * std::sin(state_.yaw) * sampling_time;
 
   // add error by normal distribution
-  sim_transfer_error(state_);
+  simTransferError(state_);
 
   // convert State to geometry_msgs::PoseStamped
   current_pose_.header.stamp = ros::Time::now();
   current_pose_.header.frame_id = "base_link";
-  convert_to_pose(current_pose_, state_);
+  convertToPose(current_pose_, state_);
 
   // update velocity
   v_ += (plan_v * sampling_time);
   w_ += (plan_w * sampling_time);
 
   // publish tf (covert pose stamped to transform stamped).
-  publish_pose_to_transform(current_pose_, "base_link");
+  publishPoseToTransform(current_pose_, "base_link");
   // publish current pose;
   currnet_pose_pub_.publish(current_pose_);
 
   previous_time_ = current_time;
 }
 
-void NavSim::publish_pose_to_transform(geometry_msgs::PoseStamped pose, std::string frame)
+void NavSim::publishPoseToTransform(geometry_msgs::PoseStamped pose, std::string frame)
 {
   static tf2_ros::TransformBroadcaster base_link_broadcaster;
   geometry_msgs::TransformStamped base_link_transform;
