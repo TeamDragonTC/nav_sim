@@ -8,20 +8,43 @@ void NavSim::initialize()
 
   cmd_vel_sub_ = pnh_.subscribe("/cmd_vel", 1, &NavSim::callbackCmdVel, this);
   initialpose_sub_ = pnh_.subscribe("/initialpose", 1, &NavSim::callbackInitialpose, this);
+
+  timer_ = nh_.createTimer(ros::Duration(0.01), &NavSim::timerCallback, this);
 }
 
-void NavSim::run()
+void NavSim::timerCallback(const ros::TimerEvent& e)
 {
-  ros::AsyncSpinner spinner(1);
-  spinner.start();
-  ros::Rate rate(100);
-  while (ros::ok()) {
-    {
-      std::lock_guard<std::mutex> lock(m_);
-      updatePose();
-    }
-    rate.sleep();
-  }
+
+  const double current_time = ros::Time::now().toSec();
+  const double sampling_time = current_time - previous_time_;
+
+  // calculate velocity using p control.
+  double plan_v, plan_w;
+  planVelocity(plan_v, plan_w);
+
+  // calculate next robot pose from target velocity
+  state_.yaw += w_ * sampling_time;
+  state_.x += v_ * std::cos(state_.yaw) * sampling_time;
+  state_.y += v_ * std::sin(state_.yaw) * sampling_time;
+
+  // add error by normal distribution
+  simTransferError(state_);
+
+  // convert State to geometry_msgs::PoseStamped
+  current_pose_.header.stamp = ros::Time::now();
+  current_pose_.header.frame_id = "base_link";
+  convertToPose(current_pose_, state_);
+
+  // update velocity
+  v_ += (plan_v * sampling_time);
+  w_ += (plan_w * sampling_time);
+
+  // publish tf (covert pose stamped to transform stamped).
+  publishPoseToTransform(current_pose_, "base_link");
+  // publish current pose;
+  currnet_pose_pub_.publish(current_pose_);
+
+  previous_time_ = current_time;
 }
 
 void NavSim::planVelocity(double & target_v, double & target_w)
@@ -66,40 +89,6 @@ void NavSim::simTransferError(State & state)
   state.x += (error_coeff_)*dist(engine);
   state.y += (error_coeff_)*dist(engine);
   state.yaw += (error_coeff_)*dist(engine);
-}
-
-void NavSim::updatePose()
-{
-  const double current_time = ros::Time::now().toSec();
-  const double sampling_time = current_time - previous_time_;
-
-  // calculate velocity using p control.
-  double plan_v, plan_w;
-  planVelocity(plan_v, plan_w);
-
-  // calculate next robot pose from target velocity
-  state_.yaw += w_ * sampling_time;
-  state_.x += v_ * std::cos(state_.yaw) * sampling_time;
-  state_.y += v_ * std::sin(state_.yaw) * sampling_time;
-
-  // add error by normal distribution
-  simTransferError(state_);
-
-  // convert State to geometry_msgs::PoseStamped
-  current_pose_.header.stamp = ros::Time::now();
-  current_pose_.header.frame_id = "base_link";
-  convertToPose(current_pose_, state_);
-
-  // update velocity
-  v_ += (plan_v * sampling_time);
-  w_ += (plan_w * sampling_time);
-
-  // publish tf (covert pose stamped to transform stamped).
-  publishPoseToTransform(current_pose_, "base_link");
-  // publish current pose;
-  currnet_pose_pub_.publish(current_pose_);
-
-  previous_time_ = current_time;
 }
 
 void NavSim::publishPoseToTransform(geometry_msgs::PoseStamped pose, std::string frame)

@@ -28,8 +28,6 @@ public:
   ~NavSim() {}
 
   void initialize();
-  void run();
-  void updatePose();
   void convertToPose(geometry_msgs::PoseStamped & pose, State state);
   void simTransferError(State & state);
   void publishPoseToTransform(geometry_msgs::PoseStamped pose, std::string frame);
@@ -41,11 +39,14 @@ public:
     cmd_vel_ = msg;
   }
   void callbackInitialpose(const geometry_msgs::PoseWithCovarianceStamped & msg);
+  void timerCallback(const ros::TimerEvent & e);
 
 private:
   State state_;
+
   ros::NodeHandle nh_;
   ros::NodeHandle pnh_;
+  ros::Timer timer_;
 
   double error_coeff_;
   double previous_time_;
