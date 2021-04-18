@@ -8,5 +8,5 @@
   </node>
 
   <node name="teleop_twist_keyboard" pkg="teleop_twist_keyboard" type="teleop_twist_keyboard.py"/>
-  <node name="rviz" pkg="rviz" type="rviz" args="-d $(find nav_sim)/config/nav_sim.rviz"/>
+  <node name="rviz" pkg="rviz" type="rviz" args="-d $(find nav_sim)/rviz/nav_sim.rviz"/>
 </launch>
