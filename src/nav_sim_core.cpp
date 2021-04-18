@@ -3,17 +3,31 @@
 void NavSim::initialize()
 {
   pnh_.param<double>("error_coeff", error_coeff_, 0.01);
+  pnh_.param<std::string>("config", config_, "");
 
   currnet_pose_pub_ = pnh_.advertise<geometry_msgs::PoseStamped>("/current_pose", 10);
 
   cmd_vel_sub_ = pnh_.subscribe("/cmd_vel", 1, &NavSim::callbackCmdVel, this);
   initialpose_sub_ = pnh_.subscribe("/initialpose", 1, &NavSim::callbackInitialpose, this);
 
-  landmark_pose_list_.push_back(State(2.0, 0.0, 0.0));
-  landmark_pose_list_.push_back(State(0.0, 2.0, 0.0));
-  landmark_pose_list_.push_back(State(0.0, -2.0, 0.0));
+  landmark_pose_list_ = parseYaml(config_);
 
   timer_ = nh_.createTimer(ros::Duration(0.01), &NavSim::timerCallback, this);
+}
+
+std::vector<Landmark> NavSim::parseYaml(const std::string yaml)
+{
+  YAML::Node config = YAML::LoadFile(yaml);
+
+  std::vector<Landmark> landmark_pose_list;
+  for (YAML::const_iterator itr = config.begin(); itr != config.end(); ++itr) {
+    Landmark landmark;
+    landmark.landmark_id_ = itr->first.as<std::string>();
+    landmark.x_ = itr->second["x"].as<double>();
+    landmark.y_ = itr->second["y"].as<double>();
+    landmark_pose_list.push_back(landmark);
+  }
+  return landmark_pose_list;
 }
 
 void NavSim::timerCallback(const ros::TimerEvent & e)
@@ -36,7 +50,7 @@ void NavSim::timerCallback(const ros::TimerEvent & e)
   // convert State to geometry_msgs::PoseStamped
   current_pose_.header.stamp = ros::Time::now();
   current_pose_.header.frame_id = "base_link";
-  convertToPose(current_pose_, state_);
+  convertToPose<State>(current_pose_, state_);
 
   // update velocity
   v_ += (plan_v * sampling_time);
@@ -45,12 +59,10 @@ void NavSim::timerCallback(const ros::TimerEvent & e)
   // publish tf (covert pose stamped to transform stamped).
   publishPoseToTransform(current_pose_, "base_link");
   // publish landmark pose
-  int landmark_id = 0;
   for (auto landmark : landmark_pose_list_) {
-    landmark_id++;
     geometry_msgs::PoseStamped landmark_pose;
-    convertToPose(landmark_pose, landmark);
-    publishPoseToTransform(landmark_pose, "landmark" + std::to_string(landmark_id));
+    convertToPose<Landmark>(landmark_pose, landmark);
+    publishPoseToTransform(landmark_pose, landmark.landmark_id_);
   }
   // publish current pose;
   currnet_pose_pub_.publish(current_pose_);
@@ -78,7 +90,8 @@ void NavSim::callbackInitialpose(const geometry_msgs::PoseWithCovarianceStamped 
   state_.yaw_ = yaw;
 }
 
-void NavSim::convertToPose(geometry_msgs::PoseStamped & pose, State state)
+template <typename PoseType>
+void NavSim::convertToPose(geometry_msgs::PoseStamped & pose, PoseType state)
 {
   pose.pose.position.x = state.x_;
   pose.pose.position.y = state.y_;

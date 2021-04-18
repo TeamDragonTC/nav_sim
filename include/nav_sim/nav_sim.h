@@ -4,6 +4,8 @@
 #include <mutex>
 #include <random>
 
+#include <yaml-cpp/yaml.h>
+
 #include <geometry_msgs/PoseStamped.h>
 #include <geometry_msgs/PoseWithCovarianceStamped.h>
 #include <geometry_msgs/Twist.h>
@@ -22,6 +24,16 @@ struct State
   State(double x, double y, double yaw) : x_(x), y_(y), yaw_(yaw) {}
 };
 
+struct Landmark
+{
+  std::string landmark_id_;
+  double x_;
+  double y_;
+  double yaw_;
+  Landmark() : x_(0.0), y_(0.0), landmark_id_("") {}
+  Landmark(double x, double y, std::string landmark_id) : x_(x), y_(y), landmark_id_(landmark_id) {}
+};
+
 class NavSim
 {
 public:
@@ -29,10 +41,12 @@ public:
   ~NavSim() {}
 
   void initialize();
-  void convertToPose(geometry_msgs::PoseStamped & pose, State state);
+  template <typename PoseType>
+  void convertToPose(geometry_msgs::PoseStamped & pose, PoseType state);
   void simTransferError(State & state);
   void publishPoseToTransform(geometry_msgs::PoseStamped pose, std::string frame);
   void planVelocity(double & target_v, double & target_w);
+  std::vector<Landmark> parseYaml(const std::string yaml);
 
   void callbackCmdVel(const geometry_msgs::Twist & msg)
   {
@@ -53,9 +67,11 @@ private:
   double previous_time_;
   double v_, w_;
 
+  std::string config_;
+
   std::mutex m_;
 
-  std::vector<State> landmark_pose_list_;
+  std::vector<Landmark> landmark_pose_list_;
 
   geometry_msgs::Twist cmd_vel_;
   geometry_msgs::PoseStamped current_pose_;

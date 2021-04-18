@@ -1,10 +1,12 @@
 <launch>
   <arg name="error_coeff" default="0.0002"/>
+  <arg name="config" default="$(find nav_sim)/config/landmark_config.yaml"/>
 
   <node name="world_to_map" pkg="tf2_ros" type="static_transform_publisher" args="0 0 0 0 0 0 world map"/>
 
   <node name="nav_sim" pkg="nav_sim" type="nav_sim_node">
     <param name="error_coeff" value="$(arg error_coeff)"/>
+    <param name="config" value="$(arg config)"/>
   </node>
 
   <node name="teleop_twist_keyboard" pkg="teleop_twist_keyboard" type="teleop_twist_keyboard.py"/>

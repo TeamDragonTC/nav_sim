@@ -1,0 +1,11 @@
+landmark_1:
+  x: 2.0
+  y: 0.0
+
+landmark_2:
+  x: 0.0
+  y: 2.0
+
+landmark_3:
+  x: 0.0
+  y: -2.0
