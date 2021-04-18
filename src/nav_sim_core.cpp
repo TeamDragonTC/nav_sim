@@ -11,14 +11,13 @@ void NavSim::initialize()
 
   landmark_pose_list_.push_back(State(2.0, 0.0, 0.0));
   landmark_pose_list_.push_back(State(0.0, 2.0, 0.0));
-  landmark_pose_list_.push_back(State(0.0,-2.0, 0.0));
+  landmark_pose_list_.push_back(State(0.0, -2.0, 0.0));
 
   timer_ = nh_.createTimer(ros::Duration(0.01), &NavSim::timerCallback, this);
 }
 
-void NavSim::timerCallback(const ros::TimerEvent& e)
+void NavSim::timerCallback(const ros::TimerEvent & e)
 {
-
   const double current_time = ros::Time::now().toSec();
   const double sampling_time = current_time - previous_time_;
 
@@ -47,11 +46,11 @@ void NavSim::timerCallback(const ros::TimerEvent& e)
   publishPoseToTransform(current_pose_, "base_link");
   // publish landmark pose
   int landmark_id = 0;
-  for(auto landmark : landmark_pose_list_) {
+  for (auto landmark : landmark_pose_list_) {
     landmark_id++;
     geometry_msgs::PoseStamped landmark_pose;
     convertToPose(landmark_pose, landmark);
-    publishPoseToTransform(landmark_pose, "landmark"+std::to_string(landmark_id));
+    publishPoseToTransform(landmark_pose, "landmark" + std::to_string(landmark_id));
   }
   // publish current pose;
   currnet_pose_pub_.publish(current_pose_);
