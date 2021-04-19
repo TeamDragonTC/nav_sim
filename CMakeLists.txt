@@ -24,4 +24,4 @@ include_directories(
 )
 
 add_executable(nav_sim_node src/nav_sim_core.cpp src/nav_sim_node.cpp)
-target_link_libraries(nav_sim_node ${catkin_LIBRARIES})
+target_link_libraries(nav_sim_node ${catkin_LIBRARIES} yaml-cpp)
