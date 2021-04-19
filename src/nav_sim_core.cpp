@@ -127,12 +127,12 @@ geometry_msgs::PoseStamped NavSim::convertToPose(PoseType state)
 tf2::Transform NavSim::convertToTransform(geometry_msgs::PoseStamped pose)
 {
   tf2::Transform transform;
-  transform.setOrigin(tf2::Vector3(
-      pose.pose.position.x, pose.pose.position.y, pose.pose.position.z));
+  transform.setOrigin(
+    tf2::Vector3(pose.pose.position.x, pose.pose.position.y, pose.pose.position.z));
   transform.setRotation(tf2::Quaternion(
-      pose.pose.orientation.x, pose.pose.orientation.y,
-      pose.pose.orientation.z, pose.pose.orientation.w));
-      return transform;
+    pose.pose.orientation.x, pose.pose.orientation.y, pose.pose.orientation.z,
+    pose.pose.orientation.w));
+  return transform;
 }
 
 void NavSim::simTransferError(State & state)

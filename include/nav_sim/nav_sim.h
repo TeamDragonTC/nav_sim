@@ -6,10 +6,10 @@
 
 #include <yaml-cpp/yaml.h>
 
-#include <nav_msgs/Path.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <geometry_msgs/PoseWithCovarianceStamped.h>
 #include <geometry_msgs/Twist.h>
+#include <nav_msgs/Path.h>
 #include <ros/ros.h>
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
@@ -41,14 +41,14 @@ public:
   NavSim() : nh_(), pnh_("~"), v_(0.0), w_(0.0) { initialize(); }
   ~NavSim() {}
 
-  void initialize();
   template <typename PoseType>
   geometry_msgs::PoseStamped convertToPose(PoseType state);
   tf2::Transform convertToTransform(geometry_msgs::PoseStamped pose);
+  std::vector<Landmark> parseYaml(const std::string yaml);
+  void initialize();
   void simTransferError(State & state);
   void publishPoseToTransform(geometry_msgs::PoseStamped pose, std::string frame);
   void planVelocity(double & target_v, double & target_w);
-  std::vector<Landmark> parseYaml(const std::string yaml);
 
   void callbackCmdVel(const geometry_msgs::Twist & msg)
   {
