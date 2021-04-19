@@ -6,7 +6,8 @@ void NavSim::initialize()
   pnh_.param<double>("limit_view_angle", limit_view_angle_, 45.0);
   pnh_.param<std::string>("config", config_, "");
 
-  currnet_pose_pub_ = pnh_.advertise<geometry_msgs::PoseStamped>("/current_pose", 10);
+  landmark_info_pub_ = pnh_.advertise<visualization_msgs::MarkerArray>("landmark_info", 1);
+  currnet_pose_pub_ = pnh_.advertise<geometry_msgs::PoseStamped>("current_pose", 1);
   path_pub_ = pnh_.advertise<nav_msgs::Path>("landmark_path", 1);
 
   cmd_vel_sub_ = pnh_.subscribe("/cmd_vel", 1, &NavSim::callbackCmdVel, this);
@@ -59,8 +60,12 @@ void NavSim::timerCallback(const ros::TimerEvent & e)
   v_ += (plan_v * sampling_time);
   w_ += (plan_w * sampling_time);
 
+  clearMarker();
+  int landmark_id = 0;
   nav_msgs::Path path;
   geometry_msgs::PoseStamped path_pose;
+  visualization_msgs::MarkerArray landmark_info_array;
+  visualization_msgs::Marker landmark_info;
   for (auto landmark : landmark_pose_list_) {
     const geometry_msgs::PoseStamped landmark_pose = convertToPose<Landmark>(landmark);
 
@@ -73,7 +78,11 @@ void NavSim::timerCallback(const ros::TimerEvent & e)
                                  map_to_landmark.getOrigin().y() - map_to_base.getOrigin().y(),
                                  map_to_landmark.getOrigin().x() - map_to_base.getOrigin().x()) -
                                state_.yaw_;
-    const double diff_deg = normalizeDegree((diff_landmark_yaw * 180.0 / M_PI)); // normalize angle -180~180
+    const double diff_deg =
+      normalizeDegree((diff_landmark_yaw * 180.0 / M_PI));  // normalize angle -180~180
+    const double distance = std::sqrt(
+      std::pow(base_to_landmark.getOrigin().x(), 2) +
+      std::pow(base_to_landmark.getOrigin().y(), 2));
     if (diff_deg < limit_view_angle_ and -limit_view_angle_ < diff_deg) {
       path_pose.pose.position.x = 0.0;
       path_pose.pose.position.y = 0.0;
@@ -81,6 +90,23 @@ void NavSim::timerCallback(const ros::TimerEvent & e)
       path_pose.pose.position.x = base_to_landmark.getOrigin().x();
       path_pose.pose.position.y = base_to_landmark.getOrigin().y();
       path.poses.push_back(path_pose);
+
+      landmark_info.header.frame_id = "base_link";
+      landmark_info.header.stamp = current_pose_.header.stamp;
+      landmark_info.text = "distance: " + std::to_string(distance) + " m \n" +
+                           "yaw_diff: " + std::to_string(diff_deg) + " deg";
+      landmark_info.pose.position.x = base_to_landmark.getOrigin().x() / 2.0;
+      landmark_info.pose.position.y = base_to_landmark.getOrigin().y() / 2.0;
+      landmark_info.type = visualization_msgs::Marker::TEXT_VIEW_FACING;
+      landmark_info.id = landmark_id++;
+      landmark_info.scale.x = 0.1;
+      landmark_info.scale.y = 0.1;
+      landmark_info.scale.z = 0.1;
+      landmark_info.color.a = 1.0;
+      landmark_info.color.r = 0.6;
+      landmark_info.color.g = 0.8;
+      landmark_info.color.b = 1.0;
+      landmark_info_array.markers.push_back(landmark_info);
     }
     path.header.frame_id = current_pose_.header.frame_id;
     path.header.stamp = current_pose_.header.stamp;
@@ -89,11 +115,25 @@ void NavSim::timerCallback(const ros::TimerEvent & e)
   }
 
   path_pub_.publish(path);
+  landmark_info_pub_.publish(landmark_info_array);
 
   // publish current pose;
   currnet_pose_pub_.publish(current_pose_);
 
   previous_time_ = current_time;
+}
+
+void NavSim::clearMarker()
+{
+  visualization_msgs::MarkerArray markers;
+  visualization_msgs::Marker clear_marker;
+  clear_marker.header.frame_id = "base_link";
+  clear_marker.header.stamp = ros::Time::now();
+  clear_marker.ns = "";
+  clear_marker.action = visualization_msgs::Marker::DELETEALL;
+  clear_marker.pose.orientation.w = 1.0;
+  markers.markers.push_back(clear_marker);
+  landmark_info_pub_.publish(markers);
 }
 
 void NavSim::planVelocity(double & target_v, double & target_w)

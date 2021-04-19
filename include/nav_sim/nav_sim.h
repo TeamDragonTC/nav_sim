@@ -12,6 +12,8 @@
 #include <geometry_msgs/Twist.h>
 #include <nav_msgs/Path.h>
 #include <ros/ros.h>
+#include <visualization_msgs/Marker.h>
+#include <visualization_msgs/MarkerArray.h>
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 #include <tf2_ros/static_transform_broadcaster.h>
@@ -50,6 +52,7 @@ public:
   void simTransferError(State & state);
   void publishPoseToTransform(geometry_msgs::PoseStamped pose, std::string frame);
   void planVelocity(double & target_v, double & target_w);
+  void clearMarker();
   double normalizeDegree(const double degree)
   {
     double normalize_deg = std::fmod((degree+180.0), 360.0) - 180.0;
@@ -82,6 +85,7 @@ private:
   geometry_msgs::Twist cmd_vel_;
   geometry_msgs::PoseStamped current_pose_;
 
+  ros::Publisher landmark_info_pub_;
   ros::Publisher currnet_pose_pub_;
   ros::Publisher path_pub_;
   ros::Subscriber cmd_vel_sub_;
