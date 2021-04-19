@@ -43,8 +43,8 @@ public:
 
   void initialize();
   template <typename PoseType>
-  void convertToPose(geometry_msgs::PoseStamped & pose, PoseType state);
-  void convertToTransform(tf2::Transform &transform, geometry_msgs::PoseStamped pose);
+  geometry_msgs::PoseStamped convertToPose(PoseType state);
+  tf2::Transform convertToTransform(geometry_msgs::PoseStamped pose);
   void simTransferError(State & state);
   void publishPoseToTransform(geometry_msgs::PoseStamped pose, std::string frame);
   void planVelocity(double & target_v, double & target_w);

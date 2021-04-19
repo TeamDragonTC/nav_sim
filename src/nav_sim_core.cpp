@@ -49,9 +49,9 @@ void NavSim::timerCallback(const ros::TimerEvent & e)
   simTransferError(state_);
 
   // convert State to geometry_msgs::PoseStamped
+  current_pose_ = convertToPose<State>(state_);
   current_pose_.header.stamp = ros::Time::now();
   current_pose_.header.frame_id = "base_link";
-  convertToPose<State>(current_pose_, state_);
   publishPoseToTransform(current_pose_, current_pose_.header.frame_id);
 
   // update velocity
@@ -61,16 +61,12 @@ void NavSim::timerCallback(const ros::TimerEvent & e)
   nav_msgs::Path path;
   geometry_msgs::PoseStamped path_pose;
   for (auto landmark : landmark_pose_list_) {
-    geometry_msgs::PoseStamped landmark_pose;
-    convertToPose<Landmark>(landmark_pose, landmark);
+    const geometry_msgs::PoseStamped landmark_pose = convertToPose<Landmark>(landmark);
 
-    tf2::Transform map_to_base;
-    tf2::Transform map_to_landmark;
-
-    convertToTransform(map_to_base, current_pose_);
-    convertToTransform(map_to_landmark, landmark_pose);
+    const tf2::Transform map_to_base = convertToTransform(current_pose_);
+    const tf2::Transform map_to_landmark = convertToTransform(landmark_pose);
     // base_link to landmark transform
-    tf2::Transform base_to_landmark = map_to_base.inverse() * map_to_landmark;
+    const tf2::Transform base_to_landmark = map_to_base.inverse() * map_to_landmark;
 
     path_pose.pose.position.x = 0.0;
     path_pose.pose.position.y = 0.0;
@@ -113,8 +109,9 @@ void NavSim::callbackInitialpose(const geometry_msgs::PoseWithCovarianceStamped 
 }
 
 template <typename PoseType>
-void NavSim::convertToPose(geometry_msgs::PoseStamped & pose, PoseType state)
+geometry_msgs::PoseStamped NavSim::convertToPose(PoseType state)
 {
+  geometry_msgs::PoseStamped pose;
   pose.pose.position.x = state.x_;
   pose.pose.position.y = state.y_;
   pose.pose.position.z = 0.0;
@@ -124,15 +121,18 @@ void NavSim::convertToPose(geometry_msgs::PoseStamped & pose, PoseType state)
   pose.pose.orientation.x = quat.x();
   pose.pose.orientation.y = quat.y();
   pose.pose.orientation.z = quat.z();
+  return pose;
 }
 
-void NavSim::convertToTransform(tf2::Transform &transform , geometry_msgs::PoseStamped pose)
+tf2::Transform NavSim::convertToTransform(geometry_msgs::PoseStamped pose)
 {
+  tf2::Transform transform;
   transform.setOrigin(tf2::Vector3(
       pose.pose.position.x, pose.pose.position.y, pose.pose.position.z));
   transform.setRotation(tf2::Quaternion(
       pose.pose.orientation.x, pose.pose.orientation.y,
       pose.pose.orientation.z, pose.pose.orientation.w));
+      return transform;
 }
 
 void NavSim::simTransferError(State & state)
