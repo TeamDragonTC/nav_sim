@@ -52,6 +52,7 @@ void NavSim::timerCallback(const ros::TimerEvent & e)
   current_pose_.header.stamp = ros::Time::now();
   current_pose_.header.frame_id = "base_link";
   convertToPose<State>(current_pose_, state_);
+  publishPoseToTransform(current_pose_, current_pose_.header.frame_id);
 
   // update velocity
   v_ += (plan_v * sampling_time);
@@ -66,17 +67,8 @@ void NavSim::timerCallback(const ros::TimerEvent & e)
     tf2::Transform map_to_base;
     tf2::Transform map_to_landmark;
 
-    map_to_base.setOrigin(tf2::Vector3(
-      current_pose_.pose.position.x, current_pose_.pose.position.y, current_pose_.pose.position.z));
-    map_to_base.setRotation(tf2::Quaternion(
-      current_pose_.pose.orientation.x, current_pose_.pose.orientation.y,
-      current_pose_.pose.orientation.z, current_pose_.pose.orientation.w));
-
-    map_to_landmark.setOrigin(tf2::Vector3(
-      landmark_pose.pose.position.x, landmark_pose.pose.position.y, landmark_pose.pose.position.z));
-    map_to_landmark.setRotation(tf2::Quaternion(
-      landmark_pose.pose.orientation.x, landmark_pose.pose.orientation.y,
-      landmark_pose.pose.orientation.z, landmark_pose.pose.orientation.w));
+    convertToTransform(map_to_base, current_pose_);
+    convertToTransform(map_to_landmark, landmark_pose);
     // base_link to landmark transform
     tf2::Transform base_to_landmark = map_to_base.inverse() * map_to_landmark;
 
@@ -91,7 +83,6 @@ void NavSim::timerCallback(const ros::TimerEvent & e)
 
     publishPoseToTransform(landmark_pose, landmark.landmark_id_);
   }
-  publishPoseToTransform(current_pose_, current_pose_.header.frame_id);
 
   path_pub_.publish(path);
 
@@ -133,6 +124,15 @@ void NavSim::convertToPose(geometry_msgs::PoseStamped & pose, PoseType state)
   pose.pose.orientation.x = quat.x();
   pose.pose.orientation.y = quat.y();
   pose.pose.orientation.z = quat.z();
+}
+
+void NavSim::convertToTransform(tf2::Transform &transform , geometry_msgs::PoseStamped pose)
+{
+  transform.setOrigin(tf2::Vector3(
+      pose.pose.position.x, pose.pose.position.y, pose.pose.position.z));
+  transform.setRotation(tf2::Quaternion(
+      pose.pose.orientation.x, pose.pose.orientation.y,
+      pose.pose.orientation.z, pose.pose.orientation.w));
 }
 
 void NavSim::simTransferError(State & state)
