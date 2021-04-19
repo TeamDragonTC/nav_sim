@@ -3,6 +3,7 @@
 void NavSim::initialize()
 {
   pnh_.param<double>("error_coeff", error_coeff_, 0.01);
+  pnh_.param<double>("limit_view_angle", limit_view_angle_, 45.0);
   pnh_.param<std::string>("config", config_, "");
 
   currnet_pose_pub_ = pnh_.advertise<geometry_msgs::PoseStamped>("/current_pose", 10);
@@ -67,13 +68,20 @@ void NavSim::timerCallback(const ros::TimerEvent & e)
     const tf2::Transform map_to_landmark = convertToTransform(landmark_pose);
     // base_link to landmark transform
     const tf2::Transform base_to_landmark = map_to_base.inverse() * map_to_landmark;
-
-    path_pose.pose.position.x = 0.0;
-    path_pose.pose.position.y = 0.0;
-    path.poses.push_back(path_pose);
-    path_pose.pose.position.x = base_to_landmark.getOrigin().x();
-    path_pose.pose.position.y = base_to_landmark.getOrigin().y();
-    path.poses.push_back(path_pose);
+    // limit view angle for landmark detection
+    double diff_landmark_yaw = std::atan2(
+                                 map_to_landmark.getOrigin().y() - map_to_base.getOrigin().y(),
+                                 map_to_landmark.getOrigin().x() - map_to_base.getOrigin().x()) -
+                               state_.yaw_;
+    const double diff_deg = normalizeDegree((diff_landmark_yaw * 180.0 / M_PI)); // normalize angle -180~180
+    if (diff_deg < limit_view_angle_ and -limit_view_angle_ < diff_deg) {
+      path_pose.pose.position.x = 0.0;
+      path_pose.pose.position.y = 0.0;
+      path.poses.push_back(path_pose);
+      path_pose.pose.position.x = base_to_landmark.getOrigin().x();
+      path_pose.pose.position.y = base_to_landmark.getOrigin().y();
+      path.poses.push_back(path_pose);
+    }
     path.header.frame_id = current_pose_.header.frame_id;
     path.header.stamp = current_pose_.header.stamp;
 
@@ -96,7 +104,6 @@ void NavSim::planVelocity(double & target_v, double & target_w)
 
 void NavSim::callbackInitialpose(const geometry_msgs::PoseWithCovarianceStamped & msg)
 {
-  std::lock_guard<std::mutex> lock(m_);
   state_.x_ = msg.pose.pose.position.x;
   state_.y_ = msg.pose.pose.position.y;
   tf2::Quaternion quat(

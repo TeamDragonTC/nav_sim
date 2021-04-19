@@ -1,6 +1,7 @@
 #ifndef _NAV_SIM_H_
 #define _NAV_SIM_H_
 
+#include <cmath>
 #include <mutex>
 #include <random>
 
@@ -49,10 +50,14 @@ public:
   void simTransferError(State & state);
   void publishPoseToTransform(geometry_msgs::PoseStamped pose, std::string frame);
   void planVelocity(double & target_v, double & target_w);
-
+  double normalizeDegree(const double degree)
+  {
+    double normalize_deg = std::fmod((degree+180.0), 360.0) - 180.0;
+    if(normalize_deg < -180.0) normalize_deg += 360.0;
+    return normalize_deg;
+  }
   void callbackCmdVel(const geometry_msgs::Twist & msg)
   {
-    std::lock_guard<std::mutex> lock(m_);
     cmd_vel_ = msg;
   }
   void callbackInitialpose(const geometry_msgs::PoseWithCovarianceStamped & msg);
@@ -65,13 +70,12 @@ private:
   ros::NodeHandle pnh_;
   ros::Timer timer_;
 
+  double limit_view_angle_;
   double error_coeff_;
   double previous_time_;
   double v_, w_;
 
   std::string config_;
-
-  std::mutex m_;
 
   std::vector<Landmark> landmark_pose_list_;
 
