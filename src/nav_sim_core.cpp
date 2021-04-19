@@ -6,6 +6,7 @@ void NavSim::initialize()
   pnh_.param<std::string>("config", config_, "");
 
   currnet_pose_pub_ = pnh_.advertise<geometry_msgs::PoseStamped>("/current_pose", 10);
+  path_pub_ = pnh_.advertise<nav_msgs::Path>("landmark_path", 1);
 
   cmd_vel_sub_ = pnh_.subscribe("/cmd_vel", 1, &NavSim::callbackCmdVel, this);
   initialpose_sub_ = pnh_.subscribe("/initialpose", 1, &NavSim::callbackInitialpose, this);
@@ -56,14 +57,44 @@ void NavSim::timerCallback(const ros::TimerEvent & e)
   v_ += (plan_v * sampling_time);
   w_ += (plan_w * sampling_time);
 
-  // publish tf (covert pose stamped to transform stamped).
-  publishPoseToTransform(current_pose_, "base_link");
-  // publish landmark pose
+  nav_msgs::Path path;
+  geometry_msgs::PoseStamped path_pose;
   for (auto landmark : landmark_pose_list_) {
     geometry_msgs::PoseStamped landmark_pose;
     convertToPose<Landmark>(landmark_pose, landmark);
+
+    tf2::Transform map_to_base;
+    tf2::Transform map_to_landmark;
+
+    map_to_base.setOrigin(tf2::Vector3(
+      current_pose_.pose.position.x, current_pose_.pose.position.y, current_pose_.pose.position.z));
+    map_to_base.setRotation(tf2::Quaternion(
+      current_pose_.pose.orientation.x, current_pose_.pose.orientation.y,
+      current_pose_.pose.orientation.z, current_pose_.pose.orientation.w));
+
+    map_to_landmark.setOrigin(tf2::Vector3(
+      landmark_pose.pose.position.x, landmark_pose.pose.position.y, landmark_pose.pose.position.z));
+    map_to_landmark.setRotation(tf2::Quaternion(
+      landmark_pose.pose.orientation.x, landmark_pose.pose.orientation.y,
+      landmark_pose.pose.orientation.z, landmark_pose.pose.orientation.w));
+    // base_link to landmark transform
+    tf2::Transform base_to_landmark = map_to_base.inverse() * map_to_landmark;
+
+    path_pose.pose.position.x = 0.0;
+    path_pose.pose.position.y = 0.0;
+    path.poses.push_back(path_pose);
+    path_pose.pose.position.x = base_to_landmark.getOrigin().x();
+    path_pose.pose.position.y = base_to_landmark.getOrigin().y();
+    path.poses.push_back(path_pose);
+    path.header.frame_id = current_pose_.header.frame_id;
+    path.header.stamp = current_pose_.header.stamp;
+
     publishPoseToTransform(landmark_pose, landmark.landmark_id_);
   }
+  publishPoseToTransform(current_pose_, current_pose_.header.frame_id);
+
+  path_pub_.publish(path);
+
   // publish current pose;
   currnet_pose_pub_.publish(current_pose_);
 

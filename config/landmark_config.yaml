@@ -9,3 +9,7 @@ landmark_2:
 landmark_3:
   x: 0.0
   y: -2.0
+
+landmark_4:
+  x: -2.0
+  y: 0.0

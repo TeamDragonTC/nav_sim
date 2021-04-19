@@ -6,6 +6,7 @@
 
 #include <yaml-cpp/yaml.h>
 
+#include <nav_msgs/Path.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <geometry_msgs/PoseWithCovarianceStamped.h>
 #include <geometry_msgs/Twist.h>
@@ -77,6 +78,7 @@ private:
   geometry_msgs::PoseStamped current_pose_;
 
   ros::Publisher currnet_pose_pub_;
+  ros::Publisher path_pub_;
   ros::Subscriber cmd_vel_sub_;
   ros::Subscriber initialpose_sub_;
 };
