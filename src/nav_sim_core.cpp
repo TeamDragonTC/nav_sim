@@ -40,7 +40,7 @@ void NavSim::timerCallback(const ros::TimerEvent & e)
 
   // calculate velocity using p control.
   double plan_v, plan_w;
-  planVelocity(plan_v, plan_w);
+  velocityFilter(plan_v, plan_w);
 
   // calculate next robot pose from target velocity
   state_.yaw_ += w_ * sampling_time;
@@ -136,7 +136,7 @@ void NavSim::clearMarker()
   landmark_info_pub_.publish(markers);
 }
 
-void NavSim::planVelocity(double & target_v, double & target_w)
+void NavSim::velocityFilter(double & target_v, double & target_w)
 {
   target_v = 1.0 * (cmd_vel_.linear.x - v_);
   target_w = 1.0 * (cmd_vel_.angular.z - w_);

@@ -51,7 +51,7 @@ public:
   void initialize();
   void simTransferError(State & state);
   void publishPoseToTransform(geometry_msgs::PoseStamped pose, std::string frame);
-  void planVelocity(double & target_v, double & target_w);
+  void velocityFilter(double & target_v, double & target_w);
   void clearMarker();
   double normalizeDegree(const double degree)
   {
