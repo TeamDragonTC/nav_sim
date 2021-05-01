@@ -1,21 +1,32 @@
 #include <nav_sim/nav_sim.h>
 
+const double NOISE_PER_METER = 5.0;
+const double NOISE_STD = M_PI/60.0;
+
 void NavSim::initialize()
 {
+  pnh_.param<double>("period", period_, 0.01);
   pnh_.param<double>("error_coeff", error_coeff_, 0.01);
   pnh_.param<double>("limit_view_angle", limit_view_angle_, 45.0);
   pnh_.param<std::string>("config", config_, "");
 
+  distance_until_noise_ = getExponentialDistribution(5.0);
+
+  current_velocity_publisher_ = pnh_.advertise<geometry_msgs::TwistStamped>("twist", 10);
+  ground_truth_publisher_ = pnh_.advertise<geometry_msgs::PoseStamped>("ground_truth", 10);
+  observation_publisher_ = pnh_.advertise<nav_sim::LandmarkInfo>("observation", 10);
+  odometry_publisher_ = pnh_.advertise<nav_msgs::Odometry>("odom", 10);
+
   landmark_info_pub_ = pnh_.advertise<visualization_msgs::MarkerArray>("landmark_info", 1);
-  currnet_pose_pub_ = pnh_.advertise<geometry_msgs::PoseStamped>("current_pose", 1);
-  path_pub_ = pnh_.advertise<nav_msgs::Path>("landmark_path", 1);
+  currnet_pose_publisher_ = pnh_.advertise<geometry_msgs::PoseStamped>("current_pose", 10);
+  path_pub_ = pnh_.advertise<nav_msgs::Path>("landmark_path", 10);
 
   cmd_vel_sub_ = pnh_.subscribe("/cmd_vel", 1, &NavSim::callbackCmdVel, this);
   initialpose_sub_ = pnh_.subscribe("/initialpose", 1, &NavSim::callbackInitialpose, this);
 
   landmark_pose_list_ = parseYaml(config_);
 
-  timer_ = nh_.createTimer(ros::Duration(0.01), &NavSim::timerCallback, this);
+  timer_ = nh_.createTimer(ros::Duration(period_), &NavSim::timerCallback, this);
 }
 
 std::vector<Landmark> NavSim::parseYaml(const std::string yaml)
@@ -33,33 +44,8 @@ std::vector<Landmark> NavSim::parseYaml(const std::string yaml)
   return landmark_pose_list;
 }
 
-void NavSim::timerCallback(const ros::TimerEvent & e)
+void NavSim::observation(std::vector<Landmark> landmark_queue)
 {
-  const double current_time = ros::Time::now().toSec();
-  const double sampling_time = current_time - previous_time_;
-
-  // calculate velocity using p control.
-  double plan_v, plan_w;
-  velocityFilter(plan_v, plan_w);
-
-  // calculate next robot pose from target velocity
-  state_.yaw_ += w_ * sampling_time;
-  state_.x_ += v_ * std::cos(state_.yaw_) * sampling_time;
-  state_.y_ += v_ * std::sin(state_.yaw_) * sampling_time;
-
-  // add error by normal distribution
-  simTransferError(state_);
-
-  // convert State to geometry_msgs::PoseStamped
-  current_pose_ = convertToPose<State>(state_);
-  current_pose_.header.stamp = ros::Time::now();
-  current_pose_.header.frame_id = "base_link";
-  publishPoseToTransform(current_pose_, current_pose_.header.frame_id);
-
-  // update velocity
-  v_ += (plan_v * sampling_time);
-  w_ += (plan_w * sampling_time);
-
   clearMarker();
   int landmark_id = 0;
   nav_msgs::Path path;
@@ -67,7 +53,7 @@ void NavSim::timerCallback(const ros::TimerEvent & e)
   visualization_msgs::MarkerArray landmark_info_array;
   visualization_msgs::Marker landmark_info;
   for (auto landmark : landmark_pose_list_) {
-    const geometry_msgs::PoseStamped landmark_pose = convertToPose<Landmark>(landmark);
+    geometry_msgs::PoseStamped landmark_pose = convertToPose<Landmark>(landmark);
 
     const tf2::Transform map_to_base = convertToTransform(current_pose_);
     const tf2::Transform map_to_landmark = convertToTransform(landmark_pose);
@@ -77,7 +63,7 @@ void NavSim::timerCallback(const ros::TimerEvent & e)
     double diff_landmark_yaw = std::atan2(
                                  map_to_landmark.getOrigin().y() - map_to_base.getOrigin().y(),
                                  map_to_landmark.getOrigin().x() - map_to_base.getOrigin().x()) -
-                               state_.yaw_;
+                               current_state_.yaw_;
     const double diff_deg =
       normalizeDegree((diff_landmark_yaw * 180.0 / M_PI));  // normalize angle -180~180
     const double distance = std::sqrt(
@@ -111,14 +97,52 @@ void NavSim::timerCallback(const ros::TimerEvent & e)
     path.header.frame_id = current_pose_.header.frame_id;
     path.header.stamp = current_pose_.header.stamp;
 
-    publishPoseToTransform(landmark_pose, landmark.landmark_id_);
+    landmark_pose.header.frame_id = landmark.landmark_id_;
+    publishPoseToTransform(landmark_pose);
   }
-
   path_pub_.publish(path);
   landmark_info_pub_.publish(landmark_info_array);
+}
 
-  // publish current pose;
-  currnet_pose_pub_.publish(current_pose_);
+void NavSim::timerCallback(const ros::TimerEvent & e)
+{
+  const auto current_stamp = ros::Time::now();
+  const double current_time = current_stamp.toSec();
+  const double sampling_time = current_time - previous_time_;
+
+  // calculate velocity using p control.
+  double plan_v, plan_w;
+  velocityFilter(plan_v, plan_w);
+
+  ground_truth_.yaw_ += w_ * sampling_time;
+  ground_truth_.x_ += v_ * std::cos(ground_truth_.yaw_) * sampling_time;
+  ground_truth_.y_ += v_ * std::sin(ground_truth_.yaw_) * sampling_time;
+
+  ground_truth_pose_ = convertToPose<State>(ground_truth_);
+  ground_truth_pose_.header.stamp = current_stamp;
+  ground_truth_pose_.header.frame_id = "ground_truth";
+  publishPoseToTransform(ground_truth_pose_);
+
+  current_state_.yaw_ += w_ * sampling_time;
+  current_state_.x_ += v_ * std::cos(current_state_.yaw_) * sampling_time;
+  current_state_.y_ += v_ * std::sin(current_state_.yaw_) * sampling_time;
+  simTransferError(current_state_, sampling_time);
+
+  current_pose_ = convertToPose<State>(current_state_);
+  current_pose_.header.stamp = current_stamp;
+  current_pose_.header.frame_id = "base_link";
+  publishPoseToTransform(current_pose_);
+
+  // update velocity
+  v_ += (plan_v * sampling_time);
+  w_ += (plan_w * sampling_time);
+
+  // observation landmark
+  observation(landmark_pose_list_);
+
+  // publish ground truth / current pose;
+  currnet_pose_publisher_.publish(current_pose_);
+  ground_truth_publisher_.publish(ground_truth_pose_);
 
   previous_time_ = current_time;
 }
@@ -144,15 +168,15 @@ void NavSim::velocityFilter(double & target_v, double & target_w)
 
 void NavSim::callbackInitialpose(const geometry_msgs::PoseWithCovarianceStamped & msg)
 {
-  state_.x_ = msg.pose.pose.position.x;
-  state_.y_ = msg.pose.pose.position.y;
+  current_state_.x_ = msg.pose.pose.position.x;
+  current_state_.y_ = msg.pose.pose.position.y;
   tf2::Quaternion quat(
     msg.pose.pose.orientation.x, msg.pose.pose.orientation.y, msg.pose.pose.orientation.z,
     msg.pose.pose.orientation.w);
   tf2::Matrix3x3 mat(quat);
   double roll, pitch, yaw;
   mat.getRPY(roll, pitch, yaw);
-  state_.yaw_ = yaw;
+  current_state_.yaw_ = yaw;
 }
 
 template <typename PoseType>
@@ -182,25 +206,26 @@ tf2::Transform NavSim::convertToTransform(geometry_msgs::PoseStamped pose)
   return transform;
 }
 
-void NavSim::simTransferError(State & state)
+void NavSim::simTransferError(State & state, double time_interval)
 {
-  std::random_device seed;
-  std::default_random_engine engine(seed());
-  std::normal_distribution<> dist(0.0, 1.0);
-
-  state.x_ += (error_coeff_)*dist(engine);
-  state.y_ += (error_coeff_)*dist(engine);
-  state.yaw_ += (error_coeff_)*dist(engine);
+  // 雑音を仮定
+  // 考え方: ロボットが小石を踏むまでの道のりを考慮し、ロボットが小石を踏んだ場合に旋回方向に害す分布による誤差を与える。小石を踏むまでの道のりに対する期待値は指数分布に基づくものとする。
+  distance_until_noise_ = distance_until_noise_ - (std::fabs(cmd_vel_.linear.x) * time_interval +
+                                                   std::fabs(cmd_vel_.angular.z) * time_interval);
+  if (distance_until_noise_ <= 0.0) {
+    distance_until_noise_ += getExponentialDistribution(5.0);
+    state.yaw_ += getGaussDistribution(0.0, M_PI/60.0);
+  }
 }
 
-void NavSim::publishPoseToTransform(geometry_msgs::PoseStamped pose, std::string frame)
+void NavSim::publishPoseToTransform(geometry_msgs::PoseStamped pose)
 {
   static tf2_ros::TransformBroadcaster base_link_broadcaster;
   geometry_msgs::TransformStamped base_link_transform;
 
   base_link_transform.header.frame_id = "map";
-  base_link_transform.child_frame_id = frame;
-  base_link_transform.header.stamp = ros::Time::now();
+  base_link_transform.child_frame_id = pose.header.frame_id;
+  base_link_transform.header.stamp = pose.header.stamp;
   base_link_transform.transform.translation.x = pose.pose.position.x;
   base_link_transform.transform.translation.y = pose.pose.position.y;
   base_link_transform.transform.translation.z = pose.pose.position.z;
