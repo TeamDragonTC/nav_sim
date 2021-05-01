@@ -53,13 +53,13 @@ public:
   void publishPoseToTransform(geometry_msgs::PoseStamped pose, std::string frame);
   void velocityFilter(double & target_v, double & target_w);
   void clearMarker();
-  double normalizeDegree(const double degree)
+  inline double normalizeDegree(const double degree)
   {
     double normalize_deg = std::fmod((degree+180.0), 360.0) - 180.0;
     if(normalize_deg < -180.0) normalize_deg += 360.0;
     return normalize_deg;
   }
-  void callbackCmdVel(const geometry_msgs::Twist & msg)
+  inline void callbackCmdVel(const geometry_msgs::Twist & msg)
   {
     cmd_vel_ = msg;
   }
