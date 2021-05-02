@@ -213,8 +213,6 @@ tf2::Transform NavSim::convertToTransform(geometry_msgs::PoseStamped pose)
   return transform;
 }
 
-// 雑音を仮定
-// 考え方: ロボットが小石を踏むまでの道のりを考慮し、ロボットが小石を踏んだ場合に旋回方向にガウス分布による誤差を与える。小石を踏むまでの道のりに対する期待値は指数分布に基づくものとする。
 void NavSim::noise(State & state, double time_interval)
 {
   distance_until_noise_ = distance_until_noise_ - (std::fabs(cmd_vel_.linear.x) * time_interval +
