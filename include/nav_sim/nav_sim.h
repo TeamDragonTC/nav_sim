@@ -52,17 +52,15 @@ public:
   tf2::Transform convertToTransform(geometry_msgs::PoseStamped pose);
   std::vector<Landmark> parseYaml(const std::string yaml);
   void initialize();
-  void noise(State & state, double time_interval);
-  inline double bias(double input, double coeff)
-  {
-    return input * coeff;
-  }
   void publishPoseToTransform(geometry_msgs::PoseStamped pose);
   void velocityFilter(double & target_v, double & target_w);
   void observation(std::vector<Landmark> landmark_queue);
   void decision(
-    State & state, geometry_msgs::PoseStamped & pose, double v, double w, std::string frame_id, ros::Time stamp,
-    double sampling_time, bool error);
+    State & state, geometry_msgs::PoseStamped & pose, double v, double w, std::string frame_id,
+    ros::Time stamp, double sampling_time, bool error);
+
+  void noise(State & state, double time_interval);
+  inline double bias(double input, double coeff) { return input * coeff; }
   inline double getExponentialDistribution(double parameter)
   {
     std::random_device seed;
@@ -84,6 +82,7 @@ public:
     if (normalize_deg < -180.0) normalize_deg += 360.0;
     return normalize_deg;
   }
+
   inline void callbackCmdVel(const geometry_msgs::Twist & msg) { cmd_vel_ = msg; }
   void callbackInitialpose(const geometry_msgs::PoseWithCovarianceStamped & msg);
   void timerCallback(const ros::TimerEvent & e);

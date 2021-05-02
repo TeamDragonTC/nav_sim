@@ -107,8 +107,8 @@ void NavSim::observation(std::vector<Landmark> landmark_queue)
 }
 
 void NavSim::decision(
-  State & state, geometry_msgs::PoseStamped & pose, double v, double w, std::string frame_id, ros::Time stamp,
-  double sampling_time, bool error)
+  State & state, geometry_msgs::PoseStamped & pose, double v, double w, std::string frame_id,
+  ros::Time stamp, double sampling_time, bool error)
 {
   state.yaw_ += w * sampling_time;
   state.x_ += v * std::cos(state.yaw_) * sampling_time;
@@ -133,9 +133,12 @@ void NavSim::timerCallback(const ros::TimerEvent & e)
   velocityFilter(plan_v, plan_w);
 
   // move as ground truth
-  decision(ground_truth_, ground_truth_pose_,  v_, w_, "ground_truth",current_stamp, sampling_time, false);
+  decision(
+    ground_truth_, ground_truth_pose_, v_, w_, "ground_truth", current_stamp, sampling_time, false);
   // move as current pose with error
-  decision(current_state_, current_pose_, bias(v_, bias_rate_v_), bias(w_, bias_rate_w_), "base_link", current_stamp, sampling_time, true);
+  decision(
+    current_state_, current_pose_, bias(v_, bias_rate_v_), bias(w_, bias_rate_w_), "base_link",
+    current_stamp, sampling_time, true);
 
   // update velocity
   v_ += (plan_v * sampling_time);
