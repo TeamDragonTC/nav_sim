@@ -52,12 +52,16 @@ public:
   tf2::Transform convertToTransform(geometry_msgs::PoseStamped pose);
   std::vector<Landmark> parseYaml(const std::string yaml);
   void initialize();
-  void simTransferError(State & state, double time_interval);
+  void noise(State & state, double time_interval);
+  inline double bias(double input, double coeff)
+  {
+    return input * coeff;
+  }
   void publishPoseToTransform(geometry_msgs::PoseStamped pose);
   void velocityFilter(double & target_v, double & target_w);
   void observation(std::vector<Landmark> landmark_queue);
   void decision(
-    State & state, geometry_msgs::PoseStamped & pose, std::string frame_id, ros::Time stamp,
+    State & state, geometry_msgs::PoseStamped & pose, double v, double w, std::string frame_id, ros::Time stamp,
     double sampling_time, bool error);
   inline double getExponentialDistribution(double parameter)
   {
@@ -94,7 +98,10 @@ private:
   ros::NodeHandle pnh_;
   ros::Timer timer_;
 
+  // noise parameter
   double distance_until_noise_;
+  double bias_rate_v_;
+  double bias_rate_w_;
 
   double period_;
   double limit_view_angle_;

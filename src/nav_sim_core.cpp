@@ -11,6 +11,8 @@ void NavSim::initialize()
   pnh_.param<std::string>("config", config_, "");
 
   distance_until_noise_ = getExponentialDistribution(5.0);
+  bias_rate_v_ = getGaussDistribution(1.0, 0.1);
+  bias_rate_w_ = getGaussDistribution(1.0, 0.1);
 
   current_velocity_publisher_ = pnh_.advertise<geometry_msgs::TwistStamped>("twist", 10);
   ground_truth_publisher_ = pnh_.advertise<geometry_msgs::PoseStamped>("ground_truth", 10);
@@ -105,14 +107,14 @@ void NavSim::observation(std::vector<Landmark> landmark_queue)
 }
 
 void NavSim::decision(
-  State & state, geometry_msgs::PoseStamped & pose, std::string frame_id, ros::Time stamp,
+  State & state, geometry_msgs::PoseStamped & pose, double v, double w, std::string frame_id, ros::Time stamp,
   double sampling_time, bool error)
 {
-  state.yaw_ += w_ * sampling_time;
-  state.x_ += v_ * std::cos(state.yaw_) * sampling_time;
-  state.y_ += v_ * std::sin(state.yaw_) * sampling_time;
+  state.yaw_ += w * sampling_time;
+  state.x_ += v * std::cos(state.yaw_) * sampling_time;
+  state.y_ += v * std::sin(state.yaw_) * sampling_time;
 
-  if (error) simTransferError(state, sampling_time);
+  if (error) noise(state, sampling_time);
 
   pose = convertToPose<State>(state);
   pose.header.stamp = stamp;
@@ -131,9 +133,9 @@ void NavSim::timerCallback(const ros::TimerEvent & e)
   velocityFilter(plan_v, plan_w);
 
   // move as ground truth
-  decision(ground_truth_, ground_truth_pose_, "ground_truth", current_stamp, sampling_time, false);
+  decision(ground_truth_, ground_truth_pose_,  v_, w_, "ground_truth",current_stamp, sampling_time, false);
   // move as current pose with error
-  decision(current_state_, current_pose_, "base_link", current_stamp, sampling_time, true);
+  decision(current_state_, current_pose_, bias(v_, bias_rate_v_), bias(w_, bias_rate_w_), "base_link", current_stamp, sampling_time, false);
 
   // update velocity
   v_ += (plan_v * sampling_time);
@@ -208,10 +210,10 @@ tf2::Transform NavSim::convertToTransform(geometry_msgs::PoseStamped pose)
   return transform;
 }
 
-void NavSim::simTransferError(State & state, double time_interval)
+// 雑音を仮定
+// 考え方: ロボットが小石を踏むまでの道のりを考慮し、ロボットが小石を踏んだ場合に旋回方向にガウス分布による誤差を与える。小石を踏むまでの道のりに対する期待値は指数分布に基づくものとする。
+void NavSim::noise(State & state, double time_interval)
 {
-  // 雑音を仮定
-  // 考え方: ロボットが小石を踏むまでの道のりを考慮し、ロボットが小石を踏んだ場合に旋回方向にガウス分布による誤差を与える。小石を踏むまでの道のりに対する期待値は指数分布に基づくものとする。
   distance_until_noise_ = distance_until_noise_ - (std::fabs(cmd_vel_.linear.x) * time_interval +
                                                    std::fabs(cmd_vel_.angular.z) * time_interval);
   if (distance_until_noise_ <= 0.0) {
