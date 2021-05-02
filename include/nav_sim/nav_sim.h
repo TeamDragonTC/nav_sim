@@ -7,20 +7,20 @@
 
 #include <yaml-cpp/yaml.h>
 
-#include <nav_sim/LandmarkInfo.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <geometry_msgs/PoseWithCovarianceStamped.h>
 #include <geometry_msgs/Twist.h>
 #include <geometry_msgs/TwistStamped.h>
-#include <nav_msgs/Path.h>
 #include <nav_msgs/Odometry.h>
+#include <nav_msgs/Path.h>
+#include <nav_sim/LandmarkInfo.h>
 #include <ros/ros.h>
-#include <visualization_msgs/Marker.h>
-#include <visualization_msgs/MarkerArray.h>
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 #include <tf2_ros/static_transform_broadcaster.h>
 #include <tf2_ros/transform_broadcaster.h>
+#include <visualization_msgs/Marker.h>
+#include <visualization_msgs/MarkerArray.h>
 
 struct State
 {
@@ -56,6 +56,9 @@ public:
   void publishPoseToTransform(geometry_msgs::PoseStamped pose);
   void velocityFilter(double & target_v, double & target_w);
   void observation(std::vector<Landmark> landmark_queue);
+  void decision(
+    State & state, geometry_msgs::PoseStamped & pose, std::string frame_id, ros::Time stamp,
+    double sampling_time, bool error);
   inline double getExponentialDistribution(double parameter)
   {
     std::random_device seed;
@@ -73,14 +76,11 @@ public:
 
   inline double normalizeDegree(const double degree)
   {
-    double normalize_deg = std::fmod((degree+180.0), 360.0) - 180.0;
-    if(normalize_deg < -180.0) normalize_deg += 360.0;
+    double normalize_deg = std::fmod((degree + 180.0), 360.0) - 180.0;
+    if (normalize_deg < -180.0) normalize_deg += 360.0;
     return normalize_deg;
   }
-  inline void callbackCmdVel(const geometry_msgs::Twist & msg)
-  {
-    cmd_vel_ = msg;
-  }
+  inline void callbackCmdVel(const geometry_msgs::Twist & msg) { cmd_vel_ = msg; }
   void callbackInitialpose(const geometry_msgs::PoseWithCovarianceStamped & msg);
   void timerCallback(const ros::TimerEvent & e);
 

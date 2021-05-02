@@ -1,7 +1,7 @@
 #include <nav_sim/nav_sim.h>
 
 const double NOISE_PER_METER = 5.0;
-const double NOISE_STD = M_PI/60.0;
+const double NOISE_STD = M_PI / 60.0;
 
 void NavSim::initialize()
 {
@@ -78,7 +78,7 @@ void NavSim::observation(std::vector<Landmark> landmark_queue)
       path.poses.push_back(path_pose);
 
       landmark_info.header.frame_id = "base_link";
-      landmark_info.header.stamp = current_pose_.header.stamp;
+      landmark_info.header.stamp = ros::Time::now();
       landmark_info.text = "distance: " + std::to_string(distance) + " m \n" +
                            "yaw_diff: " + std::to_string(diff_deg) + " deg";
       landmark_info.pose.position.x = base_to_landmark.getOrigin().x() / 2.0;
@@ -94,14 +94,30 @@ void NavSim::observation(std::vector<Landmark> landmark_queue)
       landmark_info.color.b = 1.0;
       landmark_info_array.markers.push_back(landmark_info);
     }
-    path.header.frame_id = current_pose_.header.frame_id;
-    path.header.stamp = current_pose_.header.stamp;
+    path.header.frame_id = "base_link";
+    path.header.stamp = ros::Time::now();
 
     landmark_pose.header.frame_id = landmark.landmark_id_;
     publishPoseToTransform(landmark_pose);
   }
   path_pub_.publish(path);
   landmark_info_pub_.publish(landmark_info_array);
+}
+
+void NavSim::decision(
+  State & state, geometry_msgs::PoseStamped & pose, std::string frame_id, ros::Time stamp,
+  double sampling_time, bool error)
+{
+  state.yaw_ += w_ * sampling_time;
+  state.x_ += v_ * std::cos(state.yaw_) * sampling_time;
+  state.y_ += v_ * std::sin(state.yaw_) * sampling_time;
+
+  if (error) simTransferError(state, sampling_time);
+
+  pose = convertToPose<State>(state);
+  pose.header.stamp = stamp;
+  pose.header.frame_id = frame_id;
+  publishPoseToTransform(pose);
 }
 
 void NavSim::timerCallback(const ros::TimerEvent & e)
@@ -114,24 +130,10 @@ void NavSim::timerCallback(const ros::TimerEvent & e)
   double plan_v, plan_w;
   velocityFilter(plan_v, plan_w);
 
-  ground_truth_.yaw_ += w_ * sampling_time;
-  ground_truth_.x_ += v_ * std::cos(ground_truth_.yaw_) * sampling_time;
-  ground_truth_.y_ += v_ * std::sin(ground_truth_.yaw_) * sampling_time;
-
-  ground_truth_pose_ = convertToPose<State>(ground_truth_);
-  ground_truth_pose_.header.stamp = current_stamp;
-  ground_truth_pose_.header.frame_id = "ground_truth";
-  publishPoseToTransform(ground_truth_pose_);
-
-  current_state_.yaw_ += w_ * sampling_time;
-  current_state_.x_ += v_ * std::cos(current_state_.yaw_) * sampling_time;
-  current_state_.y_ += v_ * std::sin(current_state_.yaw_) * sampling_time;
-  simTransferError(current_state_, sampling_time);
-
-  current_pose_ = convertToPose<State>(current_state_);
-  current_pose_.header.stamp = current_stamp;
-  current_pose_.header.frame_id = "base_link";
-  publishPoseToTransform(current_pose_);
+  // move as ground truth
+  decision(ground_truth_, ground_truth_pose_, "ground_truth", current_stamp, sampling_time, false);
+  // move as current pose with error
+  decision(current_state_, current_pose_, "base_link", current_stamp, sampling_time, true);
 
   // update velocity
   v_ += (plan_v * sampling_time);
@@ -214,7 +216,7 @@ void NavSim::simTransferError(State & state, double time_interval)
                                                    std::fabs(cmd_vel_.angular.z) * time_interval);
   if (distance_until_noise_ <= 0.0) {
     distance_until_noise_ += getExponentialDistribution(5.0);
-    state.yaw_ += getGaussDistribution(0.0, M_PI/60.0);
+    state.yaw_ += getGaussDistribution(0.0, M_PI / 60.0);
   }
 }
 
