@@ -135,7 +135,7 @@ void NavSim::timerCallback(const ros::TimerEvent & e)
   // move as ground truth
   decision(ground_truth_, ground_truth_pose_,  v_, w_, "ground_truth",current_stamp, sampling_time, false);
   // move as current pose with error
-  decision(current_state_, current_pose_, bias(v_, bias_rate_v_), bias(w_, bias_rate_w_), "base_link", current_stamp, sampling_time, false);
+  decision(current_state_, current_pose_, bias(v_, bias_rate_v_), bias(w_, bias_rate_w_), "base_link", current_stamp, sampling_time, true);
 
   // update velocity
   v_ += (plan_v * sampling_time);
