@@ -9,13 +9,22 @@ find_package(catkin REQUIRED COMPONENTS
   tf2
   tf2_ros
   tf2_geometry_msgs
+  message_generation
+)
+
+add_message_files(
+  FILES
+  LandmarkInfo.msg
+)
+
+generate_messages(
+  DEPENDENCIES
+  geometry_msgs std_msgs
 )
 
 catkin_package(
   INCLUDE_DIRS include
-#  LIBRARIES nav_sim
-#  CATKIN_DEPENDS roscpp
-#  DEPENDS system_lib
+  #CATKIN_DEPENDS roscpp geometry_msgs tf2 tf2_ros tf2_geometry_msgs message_generation
 )
 
 include_directories(

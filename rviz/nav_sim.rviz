@@ -60,6 +60,8 @@ Visualization Manager:
         All Enabled: true
         base_link:
           Value: true
+        ground_truth:
+          Value: true
         landmark_1:
           Value: true
         landmark_2:
@@ -82,6 +84,8 @@ Visualization Manager:
           map:
             base_link:
               {}
+            ground_truth:
+              {}
             landmark_1:
               {}
             landmark_2:
@@ -99,6 +103,14 @@ Visualization Manager:
       color: 25; 255; 240
       duration: 10
       frame: base_link
+      line_width: 0.009999999776482582
+    - Class: jsk_rviz_plugin/TFTrajectory
+      Enabled: true
+      Name: TFTrajectory
+      Value: true
+      color: 239; 41; 41
+      duration: 10
+      frame: ground_truth
       line_width: 0.009999999776482582
     - Alpha: 1
       Buffer Length: 1
@@ -122,6 +134,14 @@ Visualization Manager:
       Shaft Length: 0.10000000149011612
       Topic: /nav_sim/landmark_path
       Unreliable: false
+      Value: true
+    - Class: rviz/MarkerArray
+      Enabled: true
+      Marker Topic: /nav_sim/landmark_info
+      Name: MarkerArray
+      Namespaces:
+        "": true
+      Queue Size: 100
       Value: true
   Enabled: true
   Global Options:
@@ -183,4 +203,4 @@ Window Geometry:
     collapsed: true
   Width: 1885
   X: 35
-  Y: 531
+  Y: 382
