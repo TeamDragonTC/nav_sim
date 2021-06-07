@@ -5,14 +5,24 @@ const double NOISE_STD = M_PI / 60.0;
 
 void NavSim::initialize()
 {
+  pnh_.param<double>("distance_noise_rate", distance_noise_rate_, 0.1);
+  pnh_.param<double>("direction_noise", direction_noise_, M_PI / 90);
   pnh_.param<double>("period", period_, 0.01);
   pnh_.param<double>("error_coeff", error_coeff_, 0.01);
   pnh_.param<double>("limit_view_angle", limit_view_angle_, 45.0);
   pnh_.param<std::string>("config", config_, "");
 
-  distance_until_noise_ = getExponentialDistribution(5.0);
+  // 移動に対して発生する雑音
+  distance_until_noise_ = getExponentialDistribution(1.0 / 5.0);
+  // 速度に対するバイアス誤差
   bias_rate_v_ = getGaussDistribution(1.0, 0.1);
   bias_rate_w_ = getGaussDistribution(1.0, 0.1);
+  // スタック
+  time_until_escape_ = getExponentialDistribution(1.0 / 60.0);
+  time_until_stuck_ = getExponentialDistribution(1.0 / 60.0);
+  // センサ値に対するバイアス
+  distance_noise_std_ = getGaussDistribution(0.0, distance_noise_rate_);
+  direction_noise_std_ = getGaussDistribution(0.0, direction_noise_);
 
   current_velocity_publisher_ = pnh_.advertise<geometry_msgs::TwistStamped>("twist", 10);
   ground_truth_publisher_ = pnh_.advertise<geometry_msgs::PoseStamped>("ground_truth", 10);
@@ -29,6 +39,9 @@ void NavSim::initialize()
   landmark_pose_list_ = parseYaml(config_);
 
   timer_ = nh_.createTimer(ros::Duration(period_), &NavSim::timerCallback, this);
+
+  current_stamp_ = ros::Time::now();
+  previous_time_ = current_stamp_.toSec();
 }
 
 std::vector<Landmark> NavSim::parseYaml(const std::string yaml)
@@ -54,6 +67,9 @@ void NavSim::observation(std::vector<Landmark> landmark_queue)
   geometry_msgs::PoseStamped path_pose;
   visualization_msgs::MarkerArray landmark_info_array;
   visualization_msgs::Marker landmark_info;
+
+  observation_landmark_list_.clear();
+
   for (auto landmark : landmark_pose_list_) {
     geometry_msgs::PoseStamped landmark_pose = convertToPose<Landmark>(landmark);
 
@@ -66,23 +82,37 @@ void NavSim::observation(std::vector<Landmark> landmark_queue)
                                  map_to_landmark.getOrigin().y() - map_to_base.getOrigin().y(),
                                  map_to_landmark.getOrigin().x() - map_to_base.getOrigin().x()) -
                                current_state_.yaw_;
+    // ランドマークの位置を極座標系で計算する
     const double diff_deg =
       normalizeDegree((diff_landmark_yaw * 180.0 / M_PI));  // normalize angle -180~180
     const double distance = std::sqrt(
       std::pow(base_to_landmark.getOrigin().x(), 2) +
       std::pow(base_to_landmark.getOrigin().y(), 2));
-    if (diff_deg < limit_view_angle_ and -limit_view_angle_ < diff_deg) {
+    // 観測情報に対して雑音を乗せる(雑音->バイアス)
+    observation_landmark_list_.emplace_back(observationBias(observationNoise(std::make_pair(distance, diff_deg))));
+    // 極座標から2次元座標に変換する(可視化のため)
+    const double base_to_landmark_x_with_noise =
+      observation_landmark_list_.back().first *
+      std::cos(observation_landmark_list_.back().second * M_PI / 180.0);
+    const double base_to_landmark_y_with_noise =
+      observation_landmark_list_.back().first *
+      std::sin(observation_landmark_list_.back().second * M_PI / 180.0);
+
+    if (diff_deg < limit_view_angle_ && -limit_view_angle_ < diff_deg) {
       path_pose.pose.position.x = 0.0;
       path_pose.pose.position.y = 0.0;
       path.poses.push_back(path_pose);
-      path_pose.pose.position.x = base_to_landmark.getOrigin().x();
-      path_pose.pose.position.y = base_to_landmark.getOrigin().y();
+      path_pose.pose.position.x =
+        base_to_landmark_x_with_noise;  // base_to_landmark.getOrigin().x();
+      path_pose.pose.position.y =
+        base_to_landmark_y_with_noise;  // base_to_landmark.getOrigin().y();
       path.poses.push_back(path_pose);
 
       landmark_info.header.frame_id = "base_link";
       landmark_info.header.stamp = ros::Time::now();
-      landmark_info.text = "distance: " + std::to_string(distance) + " m \n" +
-                           "yaw_diff: " + std::to_string(diff_deg) + " deg";
+      landmark_info.text =
+        "distance: " + std::to_string(observation_landmark_list_.back().first) + " m \n" +
+        "yaw_diff: " + std::to_string(observation_landmark_list_.back().second) + " deg";
       landmark_info.pose.position.x = base_to_landmark.getOrigin().x() / 2.0;
       landmark_info.pose.position.y = base_to_landmark.getOrigin().y() / 2.0;
       landmark_info.type = visualization_msgs::Marker::TEXT_VIEW_FACING;
@@ -110,6 +140,10 @@ void NavSim::decision(
   State & state, geometry_msgs::PoseStamped & pose, double v, double w, std::string frame_id,
   ros::Time stamp, double sampling_time, bool error)
 {
+#if 0
+  if(error) stuck(v, w, sampling_time);
+#endif
+
   state.yaw_ += w * sampling_time;
   state.x_ += v * std::cos(state.yaw_) * sampling_time;
   state.y_ += v * std::sin(state.yaw_) * sampling_time;
@@ -124,8 +158,8 @@ void NavSim::decision(
 
 void NavSim::timerCallback(const ros::TimerEvent & e)
 {
-  const auto current_stamp = ros::Time::now();
-  const double current_time = current_stamp.toSec();
+  current_stamp_ = ros::Time::now();
+  const double current_time = current_stamp_.toSec();
   const double sampling_time = current_time - previous_time_;
 
   // calculate velocity using p control.
@@ -134,11 +168,12 @@ void NavSim::timerCallback(const ros::TimerEvent & e)
 
   // move as ground truth
   decision(
-    ground_truth_, ground_truth_pose_, v_, w_, "ground_truth", current_stamp, sampling_time, false);
+    ground_truth_, ground_truth_pose_, v_, w_, "ground_truth", current_stamp_, sampling_time,
+    false);
   // move as current pose with error
   decision(
     current_state_, current_pose_, bias(v_, bias_rate_v_), bias(w_, bias_rate_w_), "base_link",
-    current_stamp, sampling_time, true);
+    current_stamp_, sampling_time, true);
 
   // update velocity
   v_ += (plan_v * sampling_time);
@@ -213,12 +248,55 @@ tf2::Transform NavSim::convertToTransform(geometry_msgs::PoseStamped pose)
   return transform;
 }
 
+// スタックのシミュレーション
+void NavSim::stuck(double & velocity, double & omega, double time_interval)
+{
+  if (is_stuck_) {
+    time_until_escape_ -= time_interval;
+    if (time_until_escape_ <= 0.0) {
+      time_until_escape_ += getExponentialDistribution(1.0 / 60.0);
+      is_stuck_ = false;
+      return;
+    }
+    velocity = 0.0;
+    omega = 0.0;
+  } else {
+    time_until_stuck_ -= time_interval;
+    if (time_until_stuck_ <= 0.0) {
+      time_until_stuck_ += getExponentialDistribution(1.0 / 60.0);
+      is_stuck_ = true;
+    }
+  }
+}
+
+// 観測情報に対する雑音
+std::pair<double, double> NavSim::observationNoise(const std::pair<double, double> position)
+{
+  const auto distance = position.first;
+  const auto degree = position.second;
+
+  const double gauss_for_distance = getGaussDistribution(distance, distance * distance_noise_rate_);
+  const double gauss_for_degree = getGaussDistribution(degree, direction_noise_);
+
+  return std::make_pair(gauss_for_distance, gauss_for_degree);
+}
+
+// 観測情報に対するバイアス誤差
+std::pair<double, double> NavSim::observationBias(const std::pair<double, double> position)
+{
+  const auto distance = position.first;
+  const auto degree = position.second;
+
+  return std::make_pair(distance + distance * distance_noise_std_, degree + direction_noise_std_);
+}
+
+// 移動に対する雑音
 void NavSim::noise(State & state, double time_interval)
 {
   distance_until_noise_ = distance_until_noise_ - (std::fabs(cmd_vel_.linear.x) * time_interval +
                                                    std::fabs(cmd_vel_.angular.z) * time_interval);
   if (distance_until_noise_ <= 0.0) {
-    distance_until_noise_ += getExponentialDistribution(5.0);
+    distance_until_noise_ += getExponentialDistribution(1.0 / 5.0);
     state.yaw_ += getGaussDistribution(0.0, M_PI / 60.0);
   }
 }
