@@ -90,7 +90,7 @@ void NavSim::observation(std::vector<Landmark> landmark_queue)
       std::pow(base_to_landmark.getOrigin().y(), 2));
     // 観測情報に対して雑音を乗せる(雑音->バイアス)
     observation_landmark_list_.emplace_back(observationBias(observationNoise(std::make_pair(distance, diff_deg))));
-    // 極座標から2次元座標に変換する(可視化のため)
+    // 極座標から直交座標に変換する(可視化のため)
     const double base_to_landmark_x_with_noise =
       observation_landmark_list_.back().first *
       std::cos(observation_landmark_list_.back().second * M_PI / 180.0);
