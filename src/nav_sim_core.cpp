@@ -26,7 +26,7 @@ void NavSim::initialize()
 
   current_velocity_publisher_ = pnh_.advertise<geometry_msgs::TwistStamped>("twist", 10);
   ground_truth_publisher_ = pnh_.advertise<geometry_msgs::PoseStamped>("ground_truth", 10);
-  observation_publisher_ = pnh_.advertise<nav_sim::LandmarkInfo>("observation", 10);
+  observation_publisher_ = pnh_.advertise<nav_sim::LandmarkInfoArray>("observation", 10);
   odometry_publisher_ = pnh_.advertise<nav_msgs::Odometry>("odom", 10);
 
   landmark_info_pub_ = pnh_.advertise<visualization_msgs::MarkerArray>("landmark_info", 1);
@@ -62,14 +62,16 @@ std::vector<Landmark> NavSim::parseYaml(const std::string yaml)
 void NavSim::observation(std::vector<Landmark> landmark_queue)
 {
   clearMarker();
+
   int landmark_id = 0;
   nav_msgs::Path path;
   geometry_msgs::PoseStamped path_pose;
   visualization_msgs::MarkerArray landmark_info_array;
   visualization_msgs::Marker landmark_info;
+  nav_sim::LandmarkInfo observation_result;
+  nav_sim::LandmarkInfoArray observation_result_array;
 
-  observation_landmark_list_.clear();
-
+  const auto current_time_stamp = ros::Time::now();
   for (auto landmark : landmark_pose_list_) {
     geometry_msgs::PoseStamped landmark_pose = convertToPose<Landmark>(landmark);
 
@@ -89,34 +91,34 @@ void NavSim::observation(std::vector<Landmark> landmark_queue)
       std::pow(base_to_landmark.getOrigin().x(), 2) +
       std::pow(base_to_landmark.getOrigin().y(), 2));
     // 観測情報に対して雑音を乗せる(雑音->バイアス)
-    observation_landmark_list_.emplace_back(observationBias(observationNoise(std::make_pair(distance, diff_deg))));
+    const auto result = observationBias(observationNoise(std::make_pair(distance, diff_deg)));
     // 極座標から直交座標に変換する(可視化のため)
     const double base_to_landmark_x_with_noise =
-      observation_landmark_list_.back().first *
-      std::cos(observation_landmark_list_.back().second * M_PI / 180.0);
+      result.first * std::cos(result.second * M_PI / 180.0);
     const double base_to_landmark_y_with_noise =
-      observation_landmark_list_.back().first *
-      std::sin(observation_landmark_list_.back().second * M_PI / 180.0);
+      result.first * std::sin(result.second * M_PI / 180.0);
 
     if (diff_deg < limit_view_angle_ && -limit_view_angle_ < diff_deg) {
+      observation_result.length = result.first;
+      observation_result.theta = result.second;
+      observation_result.id = landmark_id++;
+      observation_result_array.landmark_array.push_back(observation_result);
+
       path_pose.pose.position.x = 0.0;
       path_pose.pose.position.y = 0.0;
       path.poses.push_back(path_pose);
-      path_pose.pose.position.x =
-        base_to_landmark_x_with_noise;  // base_to_landmark.getOrigin().x();
-      path_pose.pose.position.y =
-        base_to_landmark_y_with_noise;  // base_to_landmark.getOrigin().y();
+      path_pose.pose.position.x = base_to_landmark_x_with_noise;
+      path_pose.pose.position.y = base_to_landmark_y_with_noise;
       path.poses.push_back(path_pose);
 
       landmark_info.header.frame_id = "base_link";
-      landmark_info.header.stamp = ros::Time::now();
-      landmark_info.text =
-        "distance: " + std::to_string(observation_landmark_list_.back().first) + " m \n" +
-        "yaw_diff: " + std::to_string(observation_landmark_list_.back().second) + " deg";
+      landmark_info.header.stamp = current_time_stamp;
+      landmark_info.text = "distance: " + std::to_string(result.first) + " m \n" +
+                           "yaw_diff: " + std::to_string(result.second) + " deg";
       landmark_info.pose.position.x = base_to_landmark.getOrigin().x() / 2.0;
       landmark_info.pose.position.y = base_to_landmark.getOrigin().y() / 2.0;
       landmark_info.type = visualization_msgs::Marker::TEXT_VIEW_FACING;
-      landmark_info.id = landmark_id++;
+      landmark_info.id = landmark_id;
       landmark_info.scale.x = 0.1;
       landmark_info.scale.y = 0.1;
       landmark_info.scale.z = 0.1;
@@ -127,13 +129,16 @@ void NavSim::observation(std::vector<Landmark> landmark_queue)
       landmark_info_array.markers.push_back(landmark_info);
     }
     path.header.frame_id = "base_link";
-    path.header.stamp = ros::Time::now();
+    path.header.stamp = current_time_stamp;
 
     landmark_pose.header.frame_id = landmark.landmark_id_;
     publishPoseToTransform(landmark_pose);
   }
   path_pub_.publish(path);
   landmark_info_pub_.publish(landmark_info_array);
+
+  observation_result_array.header.stamp = current_time_stamp;
+  observation_publisher_.publish(observation_result_array);
 }
 
 void NavSim::decision(

@@ -14,6 +14,7 @@
 #include <nav_msgs/Odometry.h>
 #include <nav_msgs/Path.h>
 #include <nav_sim/LandmarkInfo.h>
+#include <nav_sim/LandmarkInfoArray.h>
 #include <ros/ros.h>
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
@@ -123,8 +124,6 @@ private:
 
   // ランドマークの真値(world座標系)
   std::vector<Landmark> landmark_pose_list_;
-  // ロボットから見たランドマークの位置を極座標で計算後雑音を乗せたもの
-  std::vector<std::pair<double, double>> observation_landmark_list_;
 
   nav_sim::LandmarkInfo landmark_queue_;
 
