@@ -50,10 +50,11 @@ public:
 
   template <typename PoseType>
   geometry_msgs::PoseStamped convertToPose(PoseType state);
-  tf2::Transform convertToTransform(geometry_msgs::PoseStamped pose);
+  nav_msgs::Odometry convertToOdometry(const geometry_msgs::PoseStamped pose);
+  tf2::Transform convertToTransform(const geometry_msgs::PoseStamped pose);
   std::vector<Landmark> parseYaml(const std::string yaml);
   void initialize();
-  void publishPoseToTransform(geometry_msgs::PoseStamped pose);
+  void publishPoseToTransform(const geometry_msgs::PoseStamped pose, const std::string child_frame_id);
   void velocityFilter(double & target_v, double & target_w);
   void observation(std::vector<Landmark> landmark_queue);
   void decision(

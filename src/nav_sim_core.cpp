@@ -132,7 +132,7 @@ void NavSim::observation(std::vector<Landmark> landmark_queue)
     path.header.stamp = current_time_stamp;
 
     landmark_pose.header.frame_id = landmark.landmark_id_;
-    publishPoseToTransform(landmark_pose);
+    publishPoseToTransform(landmark_pose, landmark.landmark_id_);
   }
   path_pub_.publish(path);
   landmark_info_pub_.publish(landmark_info_array);
@@ -157,8 +157,8 @@ void NavSim::decision(
 
   pose = convertToPose<State>(state);
   pose.header.stamp = stamp;
-  pose.header.frame_id = frame_id;
-  publishPoseToTransform(pose);
+  pose.header.frame_id = "map";
+  publishPoseToTransform(pose, frame_id);
 }
 
 void NavSim::timerCallback(const ros::TimerEvent & e)
@@ -184,12 +184,25 @@ void NavSim::timerCallback(const ros::TimerEvent & e)
   v_ += (plan_v * sampling_time);
   w_ += (plan_w * sampling_time);
 
+  // publish current velocity
+  geometry_msgs::TwistStamped twist;
+  twist.header.stamp = current_stamp_;
+  twist.header.frame_id = "base_link";
+  twist.twist.linear.x = v_;
+  twist.twist.angular.z = w_;
+  current_velocity_publisher_.publish(twist);
+
   // observation landmark
   observation(landmark_pose_list_);
 
   // publish ground truth / current pose;
   currnet_pose_publisher_.publish(current_pose_);
   ground_truth_publisher_.publish(ground_truth_pose_);
+
+  // publish odometry
+  nav_msgs::Odometry odom = convertToOdometry(current_pose_);
+  odom.header.stamp = current_stamp_;
+  odometry_publisher_.publish(odom);
 
   previous_time_ = current_time;
 }
@@ -242,7 +255,20 @@ geometry_msgs::PoseStamped NavSim::convertToPose(PoseType state)
   return pose;
 }
 
-tf2::Transform NavSim::convertToTransform(geometry_msgs::PoseStamped pose)
+nav_msgs::Odometry NavSim::convertToOdometry(const geometry_msgs::PoseStamped pose)
+{
+  nav_msgs::Odometry odom;
+
+  odom.pose.pose = pose.pose;
+  odom.header.frame_id = "map";
+  odom.child_frame_id = "base_link";
+  odom.twist.twist.linear.x = v_;
+  odom.twist.twist.angular.z = w_;
+
+  return odom;
+}
+
+tf2::Transform NavSim::convertToTransform(const geometry_msgs::PoseStamped pose)
 {
   tf2::Transform transform;
   transform.setOrigin(
@@ -306,13 +332,13 @@ void NavSim::noise(State & state, double time_interval)
   }
 }
 
-void NavSim::publishPoseToTransform(geometry_msgs::PoseStamped pose)
+void NavSim::publishPoseToTransform(const geometry_msgs::PoseStamped pose, const std::string child_frame_id)
 {
   static tf2_ros::TransformBroadcaster base_link_broadcaster;
   geometry_msgs::TransformStamped base_link_transform;
 
   base_link_transform.header.frame_id = "map";
-  base_link_transform.child_frame_id = pose.header.frame_id;
+  base_link_transform.child_frame_id = child_frame_id;
   base_link_transform.header.stamp = pose.header.stamp;
   base_link_transform.transform.translation.x = pose.pose.position.x;
   base_link_transform.transform.translation.y = pose.pose.position.y;
