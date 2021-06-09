@@ -226,17 +226,23 @@ void NavSim::velocityFilter(double & target_v, double & target_w)
   target_w = 1.0 * (cmd_vel_.angular.z - w_);
 }
 
-void NavSim::callbackInitialpose(const geometry_msgs::PoseWithCovarianceStamped & msg)
+void NavSim::updateBasePose(const geometry_msgs::PoseWithCovarianceStamped pose_with_covariance, State &state)
 {
-  current_state_.x_ = msg.pose.pose.position.x;
-  current_state_.y_ = msg.pose.pose.position.y;
+  state.x_ = pose_with_covariance.pose.pose.position.x;
+  state.y_ = pose_with_covariance.pose.pose.position.y;
   tf2::Quaternion quat(
-    msg.pose.pose.orientation.x, msg.pose.pose.orientation.y, msg.pose.pose.orientation.z,
-    msg.pose.pose.orientation.w);
+    pose_with_covariance.pose.pose.orientation.x, pose_with_covariance.pose.pose.orientation.y, pose_with_covariance.pose.pose.orientation.z,
+    pose_with_covariance.pose.pose.orientation.w);
   tf2::Matrix3x3 mat(quat);
   double roll, pitch, yaw;
   mat.getRPY(roll, pitch, yaw);
-  current_state_.yaw_ = yaw;
+  state.yaw_ = yaw;
+}
+
+void NavSim::callbackInitialpose(const geometry_msgs::PoseWithCovarianceStamped & msg)
+{
+  updateBasePose(msg, current_state_);
+  updateBasePose(msg, ground_truth_);
 }
 
 template <typename PoseType>

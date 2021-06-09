@@ -50,6 +50,7 @@ public:
 
   template <typename PoseType>
   geometry_msgs::PoseStamped convertToPose(PoseType state);
+  void updateBasePose(const geometry_msgs::PoseWithCovarianceStamped pose_with_covariance, State &state);
   nav_msgs::Odometry convertToOdometry(const geometry_msgs::PoseStamped pose);
   tf2::Transform convertToTransform(const geometry_msgs::PoseStamped pose);
   std::vector<Landmark> parseYaml(const std::string yaml);
