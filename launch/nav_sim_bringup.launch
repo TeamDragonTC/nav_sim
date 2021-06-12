@@ -1,5 +1,6 @@
 <launch>
   <arg name="rviz" default="true"/>
+  <arg name="rviz_config" default="$(find nav_sim)/rviz/nav_sim.rviz"/>
   <arg name="error_coeff" default="0.0002"/>
   <arg name="limit_view_angle" default="65.0"/>
   <arg name="config" default="$(find nav_sim)/config/landmark_config.yaml"/>
@@ -14,6 +15,6 @@
 
   <node name="teleop_twist_keyboard" pkg="teleop_twist_keyboard" type="teleop_twist_keyboard.py"/>
   <group if="$(arg rviz)">
-    <node name="rviz" pkg="rviz" type="rviz" args="-d $(find nav_sim)/rviz/nav_sim.rviz"/>
+    <node name="rviz" pkg="rviz" type="rviz" args="-d $(arg rviz_config)"/>
   </group>
 </launch>
