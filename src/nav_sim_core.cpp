@@ -141,6 +141,23 @@ void NavSim::observation(std::vector<Landmark> landmark_queue)
   observation_publisher_.publish(observation_result_array);
 }
 
+State NavSim::motion(const double vel, const double omega, const double dt, State pose)
+{
+  State diff_pose;
+  const double t0 = pose.yaw_;
+
+  diff_pose.yaw_ = omega * dt;
+  if (std::fabs(omega) < 1e-06) {
+    diff_pose.x_ = vel * std::cos(t0) * dt;
+    diff_pose.y_ = vel * std::sin(t0) * dt;
+  } else {
+    diff_pose.x_ = (vel / omega) * (std::sin(t0 + omega * dt) - std::sin(t0));
+    diff_pose.y_ = (vel / omega) * (-std::cos(t0 + omega * dt) + std::cos(t0));
+  }
+
+  return pose + diff_pose;
+}
+
 void NavSim::decision(
   State & state, geometry_msgs::PoseStamped & pose, double v, double w, std::string frame_id,
   ros::Time stamp, double sampling_time, bool error)
@@ -149,9 +166,7 @@ void NavSim::decision(
   if(error) stuck(v, w, sampling_time);
 #endif
 
-  state.yaw_ += w * sampling_time;
-  state.x_ += v * std::cos(state.yaw_) * sampling_time;
-  state.y_ += v * std::sin(state.yaw_) * sampling_time;
+  state = motion(v, w, sampling_time, state);
 
   if (error) noise(state, sampling_time);
 
@@ -226,13 +241,14 @@ void NavSim::velocityFilter(double & target_v, double & target_w)
   target_w = 1.0 * (cmd_vel_.angular.z - w_);
 }
 
-void NavSim::updateBasePose(const geometry_msgs::PoseWithCovarianceStamped pose_with_covariance, State &state)
+void NavSim::updateBasePose(
+  const geometry_msgs::PoseWithCovarianceStamped pose_with_covariance, State & state)
 {
   state.x_ = pose_with_covariance.pose.pose.position.x;
   state.y_ = pose_with_covariance.pose.pose.position.y;
   tf2::Quaternion quat(
-    pose_with_covariance.pose.pose.orientation.x, pose_with_covariance.pose.pose.orientation.y, pose_with_covariance.pose.pose.orientation.z,
-    pose_with_covariance.pose.pose.orientation.w);
+    pose_with_covariance.pose.pose.orientation.x, pose_with_covariance.pose.pose.orientation.y,
+    pose_with_covariance.pose.pose.orientation.z, pose_with_covariance.pose.pose.orientation.w);
   tf2::Matrix3x3 mat(quat);
   double roll, pitch, yaw;
   mat.getRPY(roll, pitch, yaw);
@@ -330,15 +346,16 @@ std::pair<double, double> NavSim::observationBias(const std::pair<double, double
 // 移動に対する雑音
 void NavSim::noise(State & state, double time_interval)
 {
-  distance_until_noise_ = distance_until_noise_ - (std::fabs(cmd_vel_.linear.x) * time_interval +
-                                                   std::fabs(cmd_vel_.angular.z) * time_interval);
+  distance_until_noise_ -= ((
+    std::fabs(cmd_vel_.linear.x) * time_interval + std::fabs(cmd_vel_.angular.z) * time_interval));
   if (distance_until_noise_ <= 0.0) {
     distance_until_noise_ += getExponentialDistribution(1.0 / 5.0);
     state.yaw_ += getGaussDistribution(0.0, M_PI / 60.0);
   }
 }
 
-void NavSim::publishPoseToTransform(const geometry_msgs::PoseStamped pose, const std::string child_frame_id)
+void NavSim::publishPoseToTransform(
+  const geometry_msgs::PoseStamped pose, const std::string child_frame_id)
 {
   static tf2_ros::TransformBroadcaster base_link_broadcaster;
   geometry_msgs::TransformStamped base_link_transform;
