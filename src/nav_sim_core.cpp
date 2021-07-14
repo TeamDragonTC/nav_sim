@@ -91,12 +91,12 @@ void NavSim::observation(std::vector<Landmark> landmark_queue)
       std::pow(base_to_landmark.getOrigin().x(), 2) +
       std::pow(base_to_landmark.getOrigin().y(), 2));
     // 観測情報に対して雑音を乗せる(雑音->バイアス)
-    const auto result = observationBias(observationNoise(std::make_pair(distance, diff_deg)));
+    const auto result = observationBias(observationNoise(std::make_pair(distance, diff_deg * M_PI / 180.0)));
     // 極座標から直交座標に変換する(可視化のため)
     const double base_to_landmark_x_with_noise =
-      result.first * std::cos(result.second * M_PI / 180.0);
+      result.first * std::cos(result.second);
     const double base_to_landmark_y_with_noise =
-      result.first * std::sin(result.second * M_PI / 180.0);
+      result.first * std::sin(result.second);
 
     if (diff_deg < limit_view_angle_ && -limit_view_angle_ < diff_deg) {
       observation_result.length = result.first;
@@ -114,7 +114,7 @@ void NavSim::observation(std::vector<Landmark> landmark_queue)
       landmark_info.header.frame_id = "base_link";
       landmark_info.header.stamp = current_time_stamp;
       landmark_info.text = "distance: " + std::to_string(result.first) + " m \n" +
-                           "yaw_diff: " + std::to_string(result.second) + " deg";
+                           "yaw_diff: " + std::to_string(result.second * M_PI * 180.0) + " deg";
       landmark_info.pose.position.x = base_to_landmark.getOrigin().x() / 2.0;
       landmark_info.pose.position.y = base_to_landmark.getOrigin().y() / 2.0;
       landmark_info.type = visualization_msgs::Marker::TEXT_VIEW_FACING;
