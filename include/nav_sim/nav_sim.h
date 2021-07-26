@@ -61,7 +61,7 @@ struct Landmark
 class NavSim
 {
 public:
-  NavSim() : nh_(), pnh_("~"), v_(0.0), w_(0.0) { initialize(); }
+  NavSim() { initialize(); }
   ~NavSim() {}
 
   template <typename PoseType>
@@ -74,7 +74,6 @@ public:
   void initialize();
   void publishPoseToTransform(
     const geometry_msgs::PoseStamped pose, const std::string child_frame_id);
-  void velocityFilter(double & target_v, double & target_w);
   void observation(std::vector<Landmark> landmark_queue);
   State motion(const double vel, const double omega, const double dt, State pose);
   void decision(
@@ -118,8 +117,8 @@ private:
   State current_state_;
   State ground_truth_;
 
-  ros::NodeHandle nh_;
-  ros::NodeHandle pnh_;
+  ros::NodeHandle nh_{};
+  ros::NodeHandle pnh_{"~"};
   ros::Timer timer_;
   ros::Time current_stamp_;
 
@@ -139,7 +138,6 @@ private:
   double limit_view_angle_;
   double error_coeff_;
   double previous_time_;
-  double v_, w_;
 
   std::string config_;
 

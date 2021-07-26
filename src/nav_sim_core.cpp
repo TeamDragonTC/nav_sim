@@ -182,29 +182,20 @@ void NavSim::timerCallback(const ros::TimerEvent & e)
   const double current_time = current_stamp_.toSec();
   const double sampling_time = current_time - previous_time_;
 
-  // calculate velocity using p control.
-  double plan_v, plan_w;
-  velocityFilter(plan_v, plan_w);
-
   // move as ground truth
   decision(
-    ground_truth_, ground_truth_pose_, v_, w_, "ground_truth", current_stamp_, sampling_time,
+    ground_truth_, ground_truth_pose_, cmd_vel_.linear.x, cmd_vel_.angular.z, "ground_truth", current_stamp_, sampling_time,
     false);
   // move as current pose with error
   decision(
-    current_state_, current_pose_, bias(v_, bias_rate_v_), bias(w_, bias_rate_w_), "base_link",
+    current_state_, current_pose_, bias(cmd_vel_.linear.x, bias_rate_v_), bias(cmd_vel_.angular.z, bias_rate_w_), "base_link",
     current_stamp_, sampling_time, true);
-
-  // update velocity
-  v_ += (plan_v * sampling_time);
-  w_ += (plan_w * sampling_time);
 
   // publish current velocity
   geometry_msgs::TwistStamped twist;
   twist.header.stamp = current_stamp_;
   twist.header.frame_id = "base_link";
-  twist.twist.linear.x = v_;
-  twist.twist.angular.z = w_;
+  twist.twist = cmd_vel_;
   current_velocity_publisher_.publish(twist);
 
   // observation landmark
@@ -233,12 +224,6 @@ void NavSim::clearMarker()
   clear_marker.pose.orientation.w = 1.0;
   markers.markers.push_back(clear_marker);
   landmark_info_pub_.publish(markers);
-}
-
-void NavSim::velocityFilter(double & target_v, double & target_w)
-{
-  target_v = 1.0 * (cmd_vel_.linear.x - v_);
-  target_w = 1.0 * (cmd_vel_.angular.z - w_);
 }
 
 void NavSim::updateBasePose(
@@ -284,8 +269,7 @@ nav_msgs::Odometry NavSim::convertToOdometry(const geometry_msgs::PoseStamped po
   odom.pose.pose = pose.pose;
   odom.header.frame_id = "map";
   odom.child_frame_id = "base_link";
-  odom.twist.twist.linear.x = v_;
-  odom.twist.twist.angular.z = w_;
+  odom.twist.twist = cmd_vel_;
 
   return odom;
 }
