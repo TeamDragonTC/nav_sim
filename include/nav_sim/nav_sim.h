@@ -50,12 +50,12 @@ struct State
 
 struct Landmark
 {
-  std::string landmark_id_;
+  int landmark_id_;
   double x_;
   double y_;
   double yaw_;
-  Landmark() : x_(0.0), y_(0.0), landmark_id_("") {}
-  Landmark(double x, double y, std::string landmark_id) : x_(x), y_(y), landmark_id_(landmark_id) {}
+  Landmark() : x_(0.0), y_(0.0), landmark_id_(-1) {}
+  Landmark(double x, double y, int landmark_id) : x_(x), y_(y), landmark_id_(landmark_id) {}
 };
 
 class NavSim

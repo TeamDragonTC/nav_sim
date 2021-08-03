@@ -48,10 +48,11 @@ std::vector<Landmark> NavSim::parseYaml(const std::string yaml)
 {
   YAML::Node config = YAML::LoadFile(yaml);
 
+  int id = -1;
   std::vector<Landmark> landmark_pose_list;
   for (YAML::const_iterator itr = config.begin(); itr != config.end(); ++itr) {
     Landmark landmark;
-    landmark.landmark_id_ = itr->first.as<std::string>();
+    landmark.landmark_id_ = ++id;
     landmark.x_ = itr->second["x"].as<double>();
     landmark.y_ = itr->second["y"].as<double>();
     landmark_pose_list.push_back(landmark);
@@ -101,7 +102,7 @@ void NavSim::observation(std::vector<Landmark> landmark_queue)
     if (diff_deg < limit_view_angle_ && -limit_view_angle_ < diff_deg) {
       observation_result.length = result.first;
       observation_result.theta = result.second;
-      observation_result.id = landmark_id++;
+      observation_result.id = landmark.landmark_id_;
       observation_result_array.landmark_array.push_back(observation_result);
 
       path_pose.pose.position.x = 0.0;
@@ -131,8 +132,8 @@ void NavSim::observation(std::vector<Landmark> landmark_queue)
     path.header.frame_id = "base_link";
     path.header.stamp = current_time_stamp;
 
-    landmark_pose.header.frame_id = landmark.landmark_id_;
-    publishPoseToTransform(landmark_pose, landmark.landmark_id_);
+    landmark_pose.header.frame_id = std::to_string(landmark.landmark_id_);
+    publishPoseToTransform(landmark_pose, std::to_string(landmark.landmark_id_));
   }
   path_pub_.publish(path);
   landmark_info_pub_.publish(landmark_info_array);
