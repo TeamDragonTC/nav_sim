@@ -86,18 +86,14 @@ void NavSim::observation(std::vector<Landmark> landmark_queue)
                                  map_to_landmark.getOrigin().x() - map_to_base.getOrigin().x()) -
                                current_state_.yaw_;
     // ランドマークの位置を極座標系で計算する
-    const double diff_deg =
-      normalizeDegree((diff_landmark_yaw * 180.0 / M_PI));  // normalize angle -180~180
-    const double distance = std::sqrt(
-      std::pow(base_to_landmark.getOrigin().x(), 2) +
-      std::pow(base_to_landmark.getOrigin().y(), 2));
+    const double diff_deg = normalizeDegree((diff_landmark_yaw * 180.0 / M_PI));  // normalize angle -180~180
+    const double distance =
+      std::sqrt(std::pow(base_to_landmark.getOrigin().x(), 2) + std::pow(base_to_landmark.getOrigin().y(), 2));
     // 観測情報に対して雑音を乗せる(雑音->バイアス)
     const auto result = observationBias(observationNoise(std::make_pair(distance, diff_deg * M_PI / 180.0)));
     // 極座標から直交座標に変換する(可視化のため)
-    const double base_to_landmark_x_with_noise =
-      result.first * std::cos(result.second);
-    const double base_to_landmark_y_with_noise =
-      result.first * std::sin(result.second);
+    const double base_to_landmark_x_with_noise = result.first * std::cos(result.second);
+    const double base_to_landmark_y_with_noise = result.first * std::sin(result.second);
 
     if (diff_deg < limit_view_angle_ && -limit_view_angle_ < diff_deg) {
       observation_result.length = result.first;
@@ -119,7 +115,7 @@ void NavSim::observation(std::vector<Landmark> landmark_queue)
       landmark_info.pose.position.x = base_to_landmark.getOrigin().x() / 2.0;
       landmark_info.pose.position.y = base_to_landmark.getOrigin().y() / 2.0;
       landmark_info.type = visualization_msgs::Marker::TEXT_VIEW_FACING;
-      landmark_info.id = landmark_id;
+      landmark_info.id = landmark_id++;
       landmark_info.scale.x = 0.1;
       landmark_info.scale.y = 0.1;
       landmark_info.scale.z = 0.1;
@@ -160,8 +156,8 @@ State NavSim::motion(const double vel, const double omega, const double dt, Stat
 }
 
 void NavSim::decision(
-  State & state, geometry_msgs::PoseStamped & pose, double v, double w, std::string frame_id,
-  ros::Time stamp, double sampling_time, bool error)
+  State& state, geometry_msgs::PoseStamped& pose, double v, double w, std::string frame_id, ros::Time stamp,
+  double sampling_time, bool error)
 {
 #if 0
   if(error) stuck(v, w, sampling_time);
@@ -169,7 +165,8 @@ void NavSim::decision(
 
   state = motion(v, w, sampling_time, state);
 
-  if (error) noise(state, sampling_time);
+  if (error)
+    noise(state, sampling_time);
 
   pose = convertToPose<State>(state);
   pose.header.stamp = stamp;
@@ -177,7 +174,7 @@ void NavSim::decision(
   publishPoseToTransform(pose, frame_id);
 }
 
-void NavSim::timerCallback(const ros::TimerEvent & e)
+void NavSim::timerCallback(const ros::TimerEvent& e)
 {
   current_stamp_ = ros::Time::now();
   const double current_time = current_stamp_.toSec();
@@ -185,12 +182,12 @@ void NavSim::timerCallback(const ros::TimerEvent & e)
 
   // move as ground truth
   decision(
-    ground_truth_, ground_truth_pose_, cmd_vel_.linear.x, cmd_vel_.angular.z, "ground_truth", current_stamp_, sampling_time,
-    false);
+    ground_truth_, ground_truth_pose_, cmd_vel_.linear.x, cmd_vel_.angular.z, "ground_truth", current_stamp_,
+    sampling_time, false);
   // move as current pose with error
   decision(
-    current_state_, current_pose_, bias(cmd_vel_.linear.x, bias_rate_v_), bias(cmd_vel_.angular.z, bias_rate_w_), "base_link",
-    current_stamp_, sampling_time, true);
+    current_state_, current_pose_, bias(cmd_vel_.linear.x, bias_rate_v_), bias(cmd_vel_.angular.z, bias_rate_w_),
+    "base_link", current_stamp_, sampling_time, true);
 
   // publish current velocity
   geometry_msgs::TwistStamped twist;
@@ -227,8 +224,7 @@ void NavSim::clearMarker()
   landmark_info_pub_.publish(markers);
 }
 
-void NavSim::updateBasePose(
-  const geometry_msgs::PoseWithCovarianceStamped pose_with_covariance, State & state)
+void NavSim::updateBasePose(const geometry_msgs::PoseWithCovarianceStamped pose_with_covariance, State& state)
 {
   state.x_ = pose_with_covariance.pose.pose.position.x;
   state.y_ = pose_with_covariance.pose.pose.position.y;
@@ -241,7 +237,7 @@ void NavSim::updateBasePose(
   state.yaw_ = yaw;
 }
 
-void NavSim::callbackInitialpose(const geometry_msgs::PoseWithCovarianceStamped & msg)
+void NavSim::callbackInitialpose(const geometry_msgs::PoseWithCovarianceStamped& msg)
 {
   updateBasePose(msg, current_state_);
   updateBasePose(msg, ground_truth_);
@@ -278,16 +274,14 @@ nav_msgs::Odometry NavSim::convertToOdometry(const geometry_msgs::PoseStamped po
 tf2::Transform NavSim::convertToTransform(const geometry_msgs::PoseStamped pose)
 {
   tf2::Transform transform;
-  transform.setOrigin(
-    tf2::Vector3(pose.pose.position.x, pose.pose.position.y, pose.pose.position.z));
+  transform.setOrigin(tf2::Vector3(pose.pose.position.x, pose.pose.position.y, pose.pose.position.z));
   transform.setRotation(tf2::Quaternion(
-    pose.pose.orientation.x, pose.pose.orientation.y, pose.pose.orientation.z,
-    pose.pose.orientation.w));
+    pose.pose.orientation.x, pose.pose.orientation.y, pose.pose.orientation.z, pose.pose.orientation.w));
   return transform;
 }
 
 // スタックのシミュレーション
-void NavSim::stuck(double & velocity, double & omega, double time_interval)
+void NavSim::stuck(double& velocity, double& omega, double time_interval)
 {
   if (is_stuck_) {
     time_until_escape_ -= time_interval;
@@ -329,18 +323,17 @@ std::pair<double, double> NavSim::observationBias(const std::pair<double, double
 }
 
 // 移動に対する雑音
-void NavSim::noise(State & state, double time_interval)
+void NavSim::noise(State& state, double time_interval)
 {
-  distance_until_noise_ -= ((
-    std::fabs(cmd_vel_.linear.x) * time_interval + std::fabs(cmd_vel_.angular.z) * time_interval));
+  distance_until_noise_ -=
+    ((std::fabs(cmd_vel_.linear.x) * time_interval + std::fabs(cmd_vel_.angular.z) * time_interval));
   if (distance_until_noise_ <= 0.0) {
     distance_until_noise_ += getExponentialDistribution(1.0 / 5.0);
     state.yaw_ += getGaussDistribution(0.0, M_PI / 60.0);
   }
 }
 
-void NavSim::publishPoseToTransform(
-  const geometry_msgs::PoseStamped pose, const std::string child_frame_id)
+void NavSim::publishPoseToTransform(const geometry_msgs::PoseStamped pose, const std::string child_frame_id)
 {
   static tf2_ros::TransformBroadcaster base_link_broadcaster;
   geometry_msgs::TransformStamped base_link_transform;
