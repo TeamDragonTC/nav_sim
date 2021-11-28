@@ -2,6 +2,9 @@
 2D simple robot simulator.
 ![rviz](img/rviz.png)
 
+## dependencies
+[nav_sim_msgs](https://github.com/RyuYamamoto/nav_sim_msgs)
+
 ### input topic
 | topic | purpose | message type |
 | :--- | :--- | :--- |

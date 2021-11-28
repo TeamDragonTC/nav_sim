@@ -2,8 +2,8 @@
 
 int main(int argc, char** argv)
 {
-  ros::init(argc, argv, "nav_sim_node");
-  NavSim node;
-  ros::spin();
+  rclcpp::init(argc, argv);
+  rclcpp::spin(std::make_shared<NavSim>());
+  rclcpp::shutdown();
   return 0;
 }

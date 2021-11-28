@@ -4,35 +4,36 @@
 const double NOISE_PER_METER = 5.0;
 const double NOISE_STD = M_PI / 60.0;
 
-void NavSim::initialize()
+NavSim::NavSim() : Node("nav_sim")
 {
-  pnh_.param<double>("period", period_, 0.01);
-  pnh_.param<double>("error_coeff", error_coeff_, 0.01);
-  pnh_.param<double>("limit_view_angle", limit_view_angle_, 45.0);
-  pnh_.param<std::string>("config", config_, "");
+  period_ = this->declare_parameter("period", 0.01);
+  error_coeff_ = this->declare_parameter("error_coeff", 0.01);
+  limit_view_angle_ = this->declare_parameter("limit_view_angle", 45.0);
+  config_ = this->declare_parameter("config", "");
 
-  double distance_noise_rate = pnh_.param<double>("distance_noise_rate", 0.1);
-  double direction_noise = pnh_.param<double>("direction_noise", M_PI / 90);
+  double distance_noise_rate = this->declare_parameter("distance_noise_rate", 0.1);
+  double direction_noise = this->declare_parameter("direction_noise", M_PI / 90.0);
   noise_ptr_ = std::make_shared<Noise>(distance_noise_rate, direction_noise);
 
-  current_velocity_publisher_ = pnh_.advertise<geometry_msgs::TwistStamped>("twist", 10);
-  ground_truth_publisher_ = pnh_.advertise<geometry_msgs::PoseStamped>("ground_truth", 10);
-  observation_publisher_ = pnh_.advertise<nav_sim::LandmarkInfoArray>("observation", 10);
-  odometry_publisher_ = pnh_.advertise<nav_msgs::Odometry>("odom", 10);
+  current_velocity_publisher_ = this->create_publisher<geometry_msgs::msg::TwistStamped>("twist", 10);
+  ground_truth_publisher_ = this->create_publisher<geometry_msgs::msg::PoseStamped>("ground_truth", 10);
+  observation_publisher_ = this->create_publisher<nav_sim_msgs::msg::LandmarkInfoArray>("observation", 10);
+  odometry_publisher_ = this->create_publisher<nav_msgs::msg::Odometry>("odom", 10);
+  landmark_info_publisher_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("landmark_info", 1);
+  current_pose_publisher_ = this->create_publisher<geometry_msgs::msg::PoseStamped>("current_pose", 10);
+  path_publisher_ = this->create_publisher<nav_msgs::msg::Path>("landmark_path", 10);
 
-  landmark_info_pub_ = pnh_.advertise<visualization_msgs::MarkerArray>("landmark_info", 1);
-  currnet_pose_publisher_ = pnh_.advertise<geometry_msgs::PoseStamped>("current_pose", 10);
-  path_pub_ = pnh_.advertise<nav_msgs::Path>("landmark_path", 10);
+  cmd_vel_subscriber_ = this->create_subscription<geometry_msgs::msg::Twist>("/cmd_vel", 1, std::bind(&NavSim::callbackCmdVel, this, std::placeholders::_1));
+  initialpose_subscriber_ = this->create_subscription<geometry_msgs::msg::PoseWithCovarianceStamped>("/initialpose", 1, std::bind(&NavSim::callbackInitialpose, this, std::placeholders::_1));
 
-  cmd_vel_sub_ = pnh_.subscribe("/cmd_vel", 1, &NavSim::callbackCmdVel, this);
-  initialpose_sub_ = pnh_.subscribe("/initialpose", 1, &NavSim::callbackInitialpose, this);
+  broadcaster_ = std::make_shared<tf2_ros::TransformBroadcaster>(this);
 
   landmark_pose_list_ = parseYaml(config_);
 
-  timer_ = nh_.createTimer(ros::Duration(period_), &NavSim::timerCallback, this);
+  timer_ = create_wall_timer(std::chrono::milliseconds(static_cast<int>(1000 * period_)), std::bind(&NavSim::timerCallback, this));
 
-  current_stamp_ = ros::Time::now();
-  previous_time_ = current_stamp_.toSec();
+  current_stamp_ = rclcpp::Clock().now();
+  previous_time_ = current_stamp_.seconds();
 }
 
 std::vector<Landmark> NavSim::parseYaml(const std::string yaml)
@@ -56,16 +57,16 @@ void NavSim::observation(std::vector<Landmark> landmark_queue)
   clearMarker();
 
   int landmark_id = 0;
-  nav_msgs::Path path;
-  geometry_msgs::PoseStamped path_pose;
-  visualization_msgs::MarkerArray landmark_info_array;
-  visualization_msgs::Marker landmark_info;
-  nav_sim::LandmarkInfo observation_result;
-  nav_sim::LandmarkInfoArray observation_result_array;
+  nav_msgs::msg::Path path;
+  geometry_msgs::msg::PoseStamped path_pose;
+  visualization_msgs::msg::MarkerArray landmark_info_array;
+  visualization_msgs::msg::Marker landmark_info;
+  nav_sim_msgs::msg::LandmarkInfo observation_result;
+  nav_sim_msgs::msg::LandmarkInfoArray observation_result_array;
 
-  const auto current_time_stamp = ros::Time::now();
-  for (auto landmark : landmark_pose_list_) {
-    geometry_msgs::PoseStamped landmark_pose = convertToPose<Landmark>(landmark);
+  const auto current_time_stamp = rclcpp::Clock().now();
+  for (auto landmark : landmark_queue) {
+    geometry_msgs::msg::PoseStamped landmark_pose = convertToPose<Landmark>(landmark);
 
     const tf2::Transform map_to_base = convertToTransform(current_pose_);
     const tf2::Transform map_to_landmark = convertToTransform(landmark_pose);
@@ -77,11 +78,14 @@ void NavSim::observation(std::vector<Landmark> landmark_queue)
                                  map_to_landmark.getOrigin().x() - map_to_base.getOrigin().x()) -
                                current_state_.yaw_;
     // ランドマークの位置を極座標系で計算する
-    const double diff_deg = normalizeDegree((diff_landmark_yaw * 180.0 / M_PI));  // normalize angle -180~180
-    const double distance =
-      std::sqrt(std::pow(base_to_landmark.getOrigin().x(), 2) + std::pow(base_to_landmark.getOrigin().y(), 2));
+    const double diff_deg =
+      normalizeDegree((diff_landmark_yaw * 180.0 / M_PI));  // normalize angle -180~180
+    const double distance = std::sqrt(
+      std::pow(base_to_landmark.getOrigin().x(), 2) +
+      std::pow(base_to_landmark.getOrigin().y(), 2));
     // 観測情報に対して雑音を乗せる(雑音->バイアス)
-    const auto result = noise_ptr_->observationBias(noise_ptr_->observationNoise(std::make_pair(distance, diff_deg * M_PI / 180.0)));
+    const auto result = noise_ptr_->observationBias(
+      noise_ptr_->observationNoise(std::make_pair(distance, diff_deg * M_PI / 180.0)));
     // 極座標から直交座標に変換する(可視化のため)
     const double base_to_landmark_x_with_noise = result.first * std::cos(result.second);
     const double base_to_landmark_y_with_noise = result.first * std::sin(result.second);
@@ -101,11 +105,11 @@ void NavSim::observation(std::vector<Landmark> landmark_queue)
 
       landmark_info.header.frame_id = "base_link";
       landmark_info.header.stamp = current_time_stamp;
-      landmark_info.text = "distance: " + std::to_string(result.first) + " m \n" +
-                           "yaw_diff: " + std::to_string(result.second * M_PI * 180.0) + " deg";
+      landmark_info.text = "distance:" + std::to_string(result.first) + "m\n" +
+                           "yaw_diff:" + std::to_string(result.second * M_PI * 180.0) + "deg";
       landmark_info.pose.position.x = base_to_landmark.getOrigin().x() / 2.0;
       landmark_info.pose.position.y = base_to_landmark.getOrigin().y() / 2.0;
-      landmark_info.type = visualization_msgs::Marker::TEXT_VIEW_FACING;
+      landmark_info.type = visualization_msgs::msg::Marker::TEXT_VIEW_FACING;
       landmark_info.id = landmark_id++;
       landmark_info.scale.x = 0.1;
       landmark_info.scale.y = 0.1;
@@ -122,11 +126,11 @@ void NavSim::observation(std::vector<Landmark> landmark_queue)
     landmark_pose.header.frame_id = std::to_string(landmark.landmark_id_);
     publishTransform(landmark_pose, std::to_string(landmark.landmark_id_));
   }
-  path_pub_.publish(path);
-  landmark_info_pub_.publish(landmark_info_array);
+  path_publisher_->publish(path);
+  landmark_info_publisher_->publish(landmark_info_array);
 
   observation_result_array.header.stamp = current_time_stamp;
-  observation_publisher_.publish(observation_result_array);
+  observation_publisher_->publish(observation_result_array);
 }
 
 State NavSim::motion(const double vel, const double omega, const double dt, State pose)
@@ -147,13 +151,12 @@ State NavSim::motion(const double vel, const double omega, const double dt, Stat
 }
 
 void NavSim::decision(
-  State& state, geometry_msgs::PoseStamped& pose, double v, double w, std::string frame_id, ros::Time stamp,
-  double sampling_time, bool error)
+  State & state, geometry_msgs::msg::PoseStamped & pose, double v, double w, std::string frame_id,
+  rclcpp::Time stamp, double sampling_time, bool error)
 {
   state = motion(v, w, sampling_time, state);
 
-  if (error)
-    noise_ptr_->noise(state, cmd_vel_, sampling_time);
+  if (error) noise_ptr_->noise(state, cmd_vel_, sampling_time);
 
   pose = convertToPose<State>(state);
   pose.header.stamp = stamp;
@@ -161,57 +164,58 @@ void NavSim::decision(
   publishTransform(pose, frame_id);
 }
 
-void NavSim::timerCallback(const ros::TimerEvent& e)
+void NavSim::timerCallback()
 {
-  current_stamp_ = ros::Time::now();
-  const double current_time = current_stamp_.toSec();
+  current_stamp_ = rclcpp::Clock().now();
+  const double current_time = current_stamp_.seconds();
   const double sampling_time = current_time - previous_time_;
 
   // move as ground truth
   decision(
-    ground_truth_, ground_truth_pose_, cmd_vel_.linear.x, cmd_vel_.angular.z, "ground_truth", current_stamp_,
-    sampling_time, false);
+    ground_truth_, ground_truth_pose_, cmd_vel_.linear.x, cmd_vel_.angular.z, "ground_truth",
+    current_stamp_, sampling_time, false);
   // move as current pose with error
   decision(
-    current_state_, current_pose_, noise_ptr_->bias(cmd_vel_.linear.x), noise_ptr_->bias(cmd_vel_.angular.z),
-    "base_link", current_stamp_, sampling_time, true);
+    current_state_, current_pose_, noise_ptr_->bias(cmd_vel_.linear.x),
+    noise_ptr_->bias(cmd_vel_.angular.z), "base_link", current_stamp_, sampling_time, true);
 
   // publish current velocity
-  geometry_msgs::TwistStamped twist;
+  geometry_msgs::msg::TwistStamped twist;
   twist.header.stamp = current_stamp_;
   twist.header.frame_id = "base_link";
   twist.twist = cmd_vel_;
-  current_velocity_publisher_.publish(twist);
+  current_velocity_publisher_->publish(twist);
 
   // observation landmark
   observation(landmark_pose_list_);
 
   // publish ground truth / current pose;
-  currnet_pose_publisher_.publish(current_pose_);
-  ground_truth_publisher_.publish(ground_truth_pose_);
+  current_pose_publisher_->publish(current_pose_);
+  ground_truth_publisher_->publish(ground_truth_pose_);
 
   // publish odometry
-  nav_msgs::Odometry odom = convertToOdometry(current_pose_);
+  nav_msgs::msg::Odometry odom = convertToOdometry(current_pose_);
   odom.header.stamp = current_stamp_;
-  odometry_publisher_.publish(odom);
+  odometry_publisher_->publish(odom);
 
   previous_time_ = current_time;
 }
 
 void NavSim::clearMarker()
 {
-  visualization_msgs::MarkerArray markers;
-  visualization_msgs::Marker clear_marker;
+  visualization_msgs::msg::MarkerArray markers;
+  visualization_msgs::msg::Marker clear_marker;
   clear_marker.header.frame_id = "base_link";
-  clear_marker.header.stamp = ros::Time::now();
+  clear_marker.header.stamp = rclcpp::Clock().now();
   clear_marker.ns = "";
-  clear_marker.action = visualization_msgs::Marker::DELETEALL;
+  clear_marker.action = visualization_msgs::msg::Marker::DELETEALL;
   clear_marker.pose.orientation.w = 1.0;
   markers.markers.push_back(clear_marker);
-  landmark_info_pub_.publish(markers);
+  landmark_info_publisher_->publish(markers);
 }
 
-void NavSim::updateBasePose(const geometry_msgs::PoseWithCovarianceStamped pose_with_covariance, State& state)
+void NavSim::updateBasePose(
+  const geometry_msgs::msg::PoseWithCovarianceStamped pose_with_covariance, State & state)
 {
   state.x_ = pose_with_covariance.pose.pose.position.x;
   state.y_ = pose_with_covariance.pose.pose.position.y;
@@ -224,16 +228,16 @@ void NavSim::updateBasePose(const geometry_msgs::PoseWithCovarianceStamped pose_
   state.yaw_ = yaw;
 }
 
-void NavSim::callbackInitialpose(const geometry_msgs::PoseWithCovarianceStamped& msg)
+void NavSim::callbackInitialpose(const geometry_msgs::msg::PoseWithCovarianceStamped & msg)
 {
   updateBasePose(msg, current_state_);
   updateBasePose(msg, ground_truth_);
 }
 
-void NavSim::publishTransform(const geometry_msgs::PoseStamped pose, const std::string child_frame_id)
+void NavSim::publishTransform(
+  const geometry_msgs::msg::PoseStamped pose, const std::string child_frame_id)
 {
-  static tf2_ros::TransformBroadcaster base_link_broadcaster;
-  geometry_msgs::TransformStamped base_link_transform;
+  geometry_msgs::msg::TransformStamped base_link_transform;
 
   base_link_transform.header.frame_id = "map";
   base_link_transform.child_frame_id = child_frame_id;
@@ -246,5 +250,5 @@ void NavSim::publishTransform(const geometry_msgs::PoseStamped pose, const std::
   base_link_transform.transform.rotation.z = pose.pose.orientation.z;
   base_link_transform.transform.rotation.w = pose.pose.orientation.w;
 
-  base_link_broadcaster.sendTransform(base_link_transform);
+  broadcaster_->sendTransform(base_link_transform);
 }

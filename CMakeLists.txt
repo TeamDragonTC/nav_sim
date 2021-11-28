@@ -1,37 +1,28 @@
-cmake_minimum_required(VERSION 2.8.3)
+
+cmake_minimum_required(VERSION 3.5)
 project(nav_sim)
 
-add_compile_options(-std=c++11)
+if(NOT CMAKE_CXX_STANDARD)
+  set(CMAKE_CXX_STANDARD 14)
+  set(CMAKE_CXX_STANDARD_REQUIRED ON)
+  set(CMAKE_CXX_EXTENSIONS OFF)
+endif()
+if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  add_compile_options(-Wall -Wextra -Wpedantic -Werror)
+endif()
 
-find_package(catkin REQUIRED COMPONENTS
-  roscpp
-  geometry_msgs
-  tf2
-  tf2_ros
-  tf2_geometry_msgs
-  message_generation
+find_package(ament_cmake_auto REQUIRED)
+ament_auto_find_build_dependencies()
+
+ament_auto_add_executable(nav_sim_node
+  src/nav_sim_node.cpp
+  src/nav_sim_core.cpp
 )
 
-add_message_files(
-  FILES
-  LandmarkInfo.msg
-  LandmarkInfoArray.msg
-)
+target_link_libraries(nav_sim_node yaml-cpp)
 
-generate_messages(
-  DEPENDENCIES
-  geometry_msgs std_msgs
-)
-
-catkin_package(
-  INCLUDE_DIRS include
-  #CATKIN_DEPENDS roscpp geometry_msgs tf2 tf2_ros tf2_geometry_msgs message_generation
-)
-
-include_directories(
-  include
-  ${catkin_INCLUDE_DIRS}
-)
-
-add_executable(nav_sim_node src/nav_sim_core.cpp src/nav_sim_node.cpp)
-target_link_libraries(nav_sim_node ${catkin_LIBRARIES} yaml-cpp)
+if(BUILD_TESTING)
+  find_package(ament_lint_auto REQUIRED)
+  ament_lint_auto_find_test_dependencies()
+endif()
+ament_auto_package(INSTALL_TO_SHARE launch config rviz)

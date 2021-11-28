@@ -34,14 +34,14 @@ struct State
 
 struct Landmark
 {
-  int landmark_id_;
   double x_;
   double y_;
   double yaw_;
-  Landmark() : x_(0.0), y_(0.0), landmark_id_(-1)
+  int landmark_id_;
+  Landmark() : x_(0.0), y_(0.0), yaw_(0.0), landmark_id_(-1)
   {
   }
-  Landmark(double x, double y, int landmark_id) : x_(x), y_(y), landmark_id_(landmark_id)
+  Landmark(double x, double y, double yaw, int landmark_id) : x_(x), y_(y), yaw_(yaw), landmark_id_(landmark_id)
   {
   }
 };

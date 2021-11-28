@@ -1,7 +1,7 @@
 #ifndef _NOISE_HPP_
 #define _NOISE_HPP_
 
-#include <geometry_msgs/Twist.h>
+#include <geometry_msgs/msg/twist.hpp>
 
 #include <cmath>
 #include <random>
@@ -81,7 +81,7 @@ public:
 
     return std::make_pair(distance + distance * distance_noise_std_, degree + direction_noise_std_);
   }
-  void noise(State& state, geometry_msgs::Twist twist, double time_interval)
+  void noise(State& state, geometry_msgs::msg::Twist twist, double time_interval)
   {
     distance_until_noise_ -=
       ((std::fabs(twist.linear.x) * time_interval + std::fabs(twist.angular.z) * time_interval));
