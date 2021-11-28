@@ -4,8 +4,8 @@
 #include <geometry_msgs/msg/twist.hpp>
 
 #include <cmath>
-#include <random>
 #include <nav_sim/data_struct.hpp>
+#include <random>
 
 class Noise
 {
@@ -26,10 +26,7 @@ public:
   }
   ~Noise() = default;
 
-  double bias(double input)
-  {
-    return input * bias_rate_;
-  }
+  double bias(double input) { return input * bias_rate_; }
   double getExponentialDistribution(double parameter)
   {
     std::random_device seed;
@@ -45,7 +42,7 @@ public:
     return gauss(engine);
   }
 
-  void stuck(double& velocity, double& omega, double time_interval)
+  void stuck(double & velocity, double & omega, double time_interval)
   {
     if (is_stuck_) {
       time_until_escape_ -= time_interval;
@@ -69,7 +66,8 @@ public:
     const auto distance = position.first;
     const auto degree = position.second;
 
-    const double gauss_for_distance = getGaussDistribution(distance, distance * distance_noise_rate_);
+    const double gauss_for_distance =
+      getGaussDistribution(distance, distance * distance_noise_rate_);
     const double gauss_for_degree = getGaussDistribution(degree, direction_noise_);
 
     return std::make_pair(gauss_for_distance, gauss_for_degree);
@@ -81,7 +79,7 @@ public:
 
     return std::make_pair(distance + distance * distance_noise_std_, degree + direction_noise_std_);
   }
-  void noise(State& state, geometry_msgs::msg::Twist twist, double time_interval)
+  void noise(State & state, geometry_msgs::msg::Twist twist, double time_interval)
   {
     distance_until_noise_ -=
       ((std::fabs(twist.linear.x) * time_interval + std::fabs(twist.angular.z) * time_interval));
@@ -89,7 +87,7 @@ public:
       distance_until_noise_ += getExponentialDistribution(1.0 / 5.0);
       state.yaw_ += getGaussDistribution(0.0, M_PI / 60.0);
     }
-}
+  }
 
 private:
   double distance_noise_rate_;
@@ -104,7 +102,7 @@ private:
 
   double time_until_stuck_;
   double time_until_escape_;
-  bool is_stuck_{ false };
+  bool is_stuck_{false};
 };
 
 #endif

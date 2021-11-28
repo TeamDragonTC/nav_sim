@@ -1,9 +1,9 @@
 #ifndef _CONVERT_HPP_
 #define _CONVERT_HPP_
 
-#include <nav_msgs/msg/odometry.hpp>
 #include <geometry_msgs/msg/pose.hpp>
 #include <geometry_msgs/msg/pose_stamped.hpp>
+#include <nav_msgs/msg/odometry.hpp>
 
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
@@ -24,9 +24,11 @@ nav_msgs::msg::Odometry convertToOdometry(const geometry_msgs::msg::PoseStamped 
 tf2::Transform convertToTransform(const geometry_msgs::msg::PoseStamped pose)
 {
   tf2::Transform transform;
-  transform.setOrigin(tf2::Vector3(pose.pose.position.x, pose.pose.position.y, pose.pose.position.z));
+  transform.setOrigin(
+    tf2::Vector3(pose.pose.position.x, pose.pose.position.y, pose.pose.position.z));
   transform.setRotation(tf2::Quaternion(
-    pose.pose.orientation.x, pose.pose.orientation.y, pose.pose.orientation.z, pose.pose.orientation.w));
+    pose.pose.orientation.x, pose.pose.orientation.y, pose.pose.orientation.z,
+    pose.pose.orientation.w));
   return transform;
 }
 

@@ -8,12 +8,8 @@ struct State
   double x_;
   double y_;
   double yaw_;
-  State() : x_(0.0), y_(0.0), yaw_(0.0)
-  {
-  }
-  State(double x, double y, double yaw) : x_(x), y_(y), yaw_(yaw)
-  {
-  }
+  State() : x_(0.0), y_(0.0), yaw_(0.0) {}
+  State(double x, double y, double yaw) : x_(x), y_(y), yaw_(yaw) {}
   State operator+(State pose_a)
   {
     State pose_b;
@@ -38,10 +34,9 @@ struct Landmark
   double y_;
   double yaw_;
   int landmark_id_;
-  Landmark() : x_(0.0), y_(0.0), yaw_(0.0), landmark_id_(-1)
-  {
-  }
-  Landmark(double x, double y, double yaw, int landmark_id) : x_(x), y_(y), yaw_(yaw), landmark_id_(landmark_id)
+  Landmark() : x_(0.0), y_(0.0), yaw_(0.0), landmark_id_(-1) {}
+  Landmark(double x, double y, double yaw, int landmark_id)
+  : x_(x), y_(y), yaw_(yaw), landmark_id_(landmark_id)
   {
   }
 };

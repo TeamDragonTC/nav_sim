@@ -15,22 +15,32 @@ NavSim::NavSim() : Node("nav_sim")
   double direction_noise = this->declare_parameter("direction_noise", M_PI / 90.0);
   noise_ptr_ = std::make_shared<Noise>(distance_noise_rate, direction_noise);
 
-  current_velocity_publisher_ = this->create_publisher<geometry_msgs::msg::TwistStamped>("twist", 10);
-  ground_truth_publisher_ = this->create_publisher<geometry_msgs::msg::PoseStamped>("ground_truth", 10);
-  observation_publisher_ = this->create_publisher<nav_sim_msgs::msg::LandmarkInfoArray>("observation", 10);
+  current_velocity_publisher_ =
+    this->create_publisher<geometry_msgs::msg::TwistStamped>("twist", 10);
+  ground_truth_publisher_ =
+    this->create_publisher<geometry_msgs::msg::PoseStamped>("ground_truth", 10);
+  observation_publisher_ =
+    this->create_publisher<nav_sim_msgs::msg::LandmarkInfoArray>("observation", 10);
   odometry_publisher_ = this->create_publisher<nav_msgs::msg::Odometry>("odom", 10);
-  landmark_info_publisher_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("landmark_info", 1);
-  current_pose_publisher_ = this->create_publisher<geometry_msgs::msg::PoseStamped>("current_pose", 10);
+  landmark_info_publisher_ =
+    this->create_publisher<visualization_msgs::msg::MarkerArray>("landmark_info", 1);
+  current_pose_publisher_ =
+    this->create_publisher<geometry_msgs::msg::PoseStamped>("current_pose", 10);
   path_publisher_ = this->create_publisher<nav_msgs::msg::Path>("landmark_path", 10);
 
-  cmd_vel_subscriber_ = this->create_subscription<geometry_msgs::msg::Twist>("/cmd_vel", 1, std::bind(&NavSim::callbackCmdVel, this, std::placeholders::_1));
-  initialpose_subscriber_ = this->create_subscription<geometry_msgs::msg::PoseWithCovarianceStamped>("/initialpose", 1, std::bind(&NavSim::callbackInitialpose, this, std::placeholders::_1));
+  cmd_vel_subscriber_ = this->create_subscription<geometry_msgs::msg::Twist>(
+    "/cmd_vel", 1, std::bind(&NavSim::callbackCmdVel, this, std::placeholders::_1));
+  initialpose_subscriber_ =
+    this->create_subscription<geometry_msgs::msg::PoseWithCovarianceStamped>(
+      "/initialpose", 1, std::bind(&NavSim::callbackInitialpose, this, std::placeholders::_1));
 
   broadcaster_ = std::make_shared<tf2_ros::TransformBroadcaster>(this);
 
   landmark_pose_list_ = parseYaml(config_);
 
-  timer_ = create_wall_timer(std::chrono::milliseconds(static_cast<int>(1000 * period_)), std::bind(&NavSim::timerCallback, this));
+  timer_ = create_wall_timer(
+    std::chrono::milliseconds(static_cast<int>(1000 * period_)),
+    std::bind(&NavSim::timerCallback, this));
 
   current_stamp_ = rclcpp::Clock().now();
   previous_time_ = current_stamp_.seconds();

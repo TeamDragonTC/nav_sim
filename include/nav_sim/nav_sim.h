@@ -1,17 +1,22 @@
 #ifndef _NAV_SIM_H_
 #define _NAV_SIM_H_
 
+#include <chrono>
 #include <cmath>
 #include <mutex>
 #include <random>
-#include <chrono>
 
 #include <yaml-cpp/yaml.h>
 
 #include <nav_sim/data_struct.hpp>
 #include <nav_sim/noise.hpp>
 
-#include <rclcpp/rclcpp.hpp>
+#include <tf2/LinearMath/Quaternion.h>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.h>
+#include <tf2_ros/buffer.h>
+#include <tf2_ros/static_transform_broadcaster.h>
+#include <tf2_ros/transform_broadcaster.h>
+#include <tf2_ros/transform_listener.h>
 #include <geometry_msgs/msg/pose_stamped.hpp>
 #include <geometry_msgs/msg/pose_with_covariance_stamped.hpp>
 #include <geometry_msgs/msg/twist.hpp>
@@ -20,12 +25,7 @@
 #include <nav_msgs/msg/path.hpp>
 #include <nav_sim_msgs/msg/landmark_info.hpp>
 #include <nav_sim_msgs/msg/landmark_info_array.hpp>
-#include <tf2/LinearMath/Quaternion.h>
-#include <tf2_geometry_msgs/tf2_geometry_msgs.h>
-#include <tf2_ros/buffer.h>
-#include <tf2_ros/static_transform_broadcaster.h>
-#include <tf2_ros/transform_broadcaster.h>
-#include <tf2_ros/transform_listener.h>
+#include <rclcpp/rclcpp.hpp>
 #include <visualization_msgs/msg/marker.hpp>
 #include <visualization_msgs/msg/marker_array.hpp>
 
@@ -63,8 +63,8 @@ private:
   State current_state_;
   State ground_truth_;
 
-  tf2_ros::Buffer tf_buffer_{ get_clock() };
-  tf2_ros::TransformListener tf_listener_{ tf_buffer_ };
+  tf2_ros::Buffer tf_buffer_{get_clock()};
+  tf2_ros::TransformListener tf_listener_{tf_buffer_};
   std::shared_ptr<tf2_ros::TransformBroadcaster> broadcaster_;
 
   rclcpp::TimerBase::SharedPtr timer_;
