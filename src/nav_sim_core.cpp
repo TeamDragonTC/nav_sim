@@ -206,6 +206,7 @@ void NavSim::timerCallback()
   // publish odometry
   nav_msgs::msg::Odometry odom = convertToOdometry(current_pose_);
   odom.header.stamp = current_stamp_;
+  odom.twist.twist = cmd_vel_;
   odometry_publisher_->publish(odom);
 
   previous_time_ = current_time;
