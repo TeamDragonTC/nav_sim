@@ -14,6 +14,12 @@ endif()
 find_package(ament_cmake_auto REQUIRED)
 ament_auto_find_build_dependencies()
 
+if(${tf2_geometry_msgs_VERSION} VERSION_LESS 0.18.0)
+  target_compile_definitions(ndt_convergence_evaluation PUBLIC
+    USE_TF2_GEOMETRY_MSGS_DEPRECATED_HEADER
+  )
+endif()
+
 ament_auto_add_executable(nav_sim_node
   src/nav_sim_node.cpp
   src/nav_sim_core.cpp
