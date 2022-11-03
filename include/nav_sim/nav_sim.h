@@ -56,35 +56,36 @@ public:
   ~NavSim() = default;
 
   std::vector<Landmark> parseYaml(const std::string yaml);
-  void updateBasePose(
-    const geometry_msgs::msg::PoseWithCovarianceStamped pose_with_covariance, State & state);
-  void publishTransform(
-    const geometry_msgs::msg::PoseStamped pose, const std::string child_frame_id);
+  void updateBasePose(const geometry_msgs::msg::PoseWithCovarianceStamped pose_with_covariance, State& state);
+  void publishTransform(const geometry_msgs::msg::PoseStamped pose, const std::string child_frame_id);
   void observation(std::vector<Landmark> landmark_queue);
   State motion(const double vel, const double omega, const double dt, State pose);
   void decision(
-    State & state, geometry_msgs::msg::PoseStamped & pose, double v, double w, std::string frame_id,
-    rclcpp::Time stamp, double sampling_time, bool error);
+    State& state, geometry_msgs::msg::PoseStamped& pose, double v, double w, std::string frame_id, rclcpp::Time stamp,
+    double sampling_time, bool error);
 
   inline double normalizeDegree(const double degree)
   {
     double normalize_deg = std::fmod((degree + 180.0), 360.0) - 180.0;
-    if (normalize_deg < -180.0) normalize_deg += 360.0;
+    if (normalize_deg < -180.0)
+      normalize_deg += 360.0;
     return normalize_deg;
   }
 
-  geometry_msgs::msg::TransformStamped getTransform(
-    const std::string target_frame, const std::string source_frame, const rclcpp::Time stamp);
+  geometry_msgs::msg::TransformStamped
+  getTransform(const std::string target_frame, const std::string source_frame, const rclcpp::Time stamp);
   void transformPointCloud(
-    pcl::PointCloud<pcl::PointXYZ>::Ptr input_ptr, pcl::PointCloud<pcl::PointXYZ>::Ptr & output_ptr,
+    pcl::PointCloud<pcl::PointXYZ>::Ptr input_ptr, pcl::PointCloud<pcl::PointXYZ>::Ptr& output_ptr,
     const geometry_msgs::msg::TransformStamped frame_transform);
 
-  void createObstacleCloud(
-    const geometry_msgs::msg::Pose pose, pcl::PointCloud<pcl::PointXYZ>::Ptr & cloud_ptr);
+  void createObstacleCloud(const geometry_msgs::msg::Pose pose, pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud_ptr);
 
-  inline void callbackCmdVel(const geometry_msgs::msg::Twist msg) { cmd_vel_ = msg; }
-  void callbackInitialpose(const geometry_msgs::msg::PoseWithCovarianceStamped & msg);
-  void callbackInitialPoseObstacleInfo(const geometry_msgs::msg::PoseWithCovarianceStamped & msg);
+  inline void callbackCmdVel(const geometry_msgs::msg::Twist msg)
+  {
+    cmd_vel_ = msg;
+  }
+  void callbackInitialpose(const geometry_msgs::msg::PoseWithCovarianceStamped& msg);
+  void callbackInitialPoseObstacleInfo(const geometry_msgs::msg::PoseWithCovarianceStamped& msg);
   void timerCallback();
 
   void clearMarker();
@@ -93,8 +94,8 @@ private:
   State current_state_;
   State ground_truth_;
 
-  tf2_ros::Buffer tf_buffer_{get_clock()};
-  tf2_ros::TransformListener tf_listener_{tf_buffer_};
+  tf2_ros::Buffer tf_buffer_{ get_clock() };
+  tf2_ros::TransformListener tf_listener_{ tf_buffer_ };
   std::shared_ptr<tf2_ros::TransformBroadcaster> broadcaster_;
 
   rclcpp::TimerBase::SharedPtr timer_;
@@ -108,6 +109,7 @@ private:
   double previous_time_;
 
   std::string config_;
+  std::array<double, 36> covariance_;
 
   // ランドマークの真値(world座標系)
   std::vector<Landmark> landmark_pose_list_;
@@ -118,6 +120,7 @@ private:
 
   geometry_msgs::msg::Twist cmd_vel_;
   geometry_msgs::msg::PoseStamped current_pose_;
+  geometry_msgs::msg::PoseWithCovarianceStamped current_pose_with_covariance_;
   geometry_msgs::msg::PoseStamped ground_truth_pose_;
 
   rclcpp::Publisher<geometry_msgs::msg::TwistStamped>::SharedPtr current_velocity_publisher_;
@@ -126,14 +129,13 @@ private:
   rclcpp::Publisher<nav_sim_msgs::msg::LandmarkInfoArray>::SharedPtr observation_publisher_;
   rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr landmark_info_publisher_;
   rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr current_pose_publisher_;
+  rclcpp::Publisher<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr current_pose_with_covariance_publisher_;
   rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr path_publisher_;
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr obstacle_cloud_publisher_;
 
   rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_subscriber_;
-  rclcpp::Subscription<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr
-    initialpose_subscriber_;
-  rclcpp::Subscription<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr
-    initialpose_obstacle_subscriber_;
+  rclcpp::Subscription<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr initialpose_subscriber_;
+  rclcpp::Subscription<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr initialpose_obstacle_subscriber_;
 };
 
 #endif

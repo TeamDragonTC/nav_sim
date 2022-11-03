@@ -1,16 +1,9 @@
 #include <nav_sim/convert.hpp>
 
-#include <geometry_msgs/msg/detail/pose_with_covariance_stamped__struct.hpp>
-#include <geometry_msgs/msg/detail/transform_stamped__struct.hpp>
-#include <sensor_msgs/msg/detail/point_cloud2__struct.hpp>
-
 #include <nav_sim/nav_sim.h>
 #include <pcl/point_cloud.h>
 #include <pcl_conversions/pcl_conversions.h>
 #include <tf2/LinearMath/Transform.h>
-
-const double NOISE_PER_METER = 5.0;
-const double NOISE_STD = M_PI / 60.0;
 
 NavSim::NavSim() : Node("nav_sim")
 {
@@ -26,38 +19,35 @@ NavSim::NavSim() : Node("nav_sim")
   obstacle_radius_ = this->declare_parameter("obstacle_radius", 0.1);
   obstacle_cloud_.reset(new pcl::PointCloud<pcl::PointXYZ>);
 
-  current_velocity_publisher_ =
-    this->create_publisher<geometry_msgs::msg::TwistStamped>("twist", 10);
-  ground_truth_publisher_ =
-    this->create_publisher<geometry_msgs::msg::PoseStamped>("ground_truth", 10);
-  observation_publisher_ =
-    this->create_publisher<nav_sim_msgs::msg::LandmarkInfoArray>("observation", 10);
+  std::vector<double> covariance = this->declare_parameter<std::vector<double>>("covariance");
+  for (std::size_t idx = 0; idx < covariance.size(); idx++) {
+    covariance_[idx] = covariance[idx];
+  }
+
+  current_velocity_publisher_ = this->create_publisher<geometry_msgs::msg::TwistStamped>("twist", 10);
+  ground_truth_publisher_ = this->create_publisher<geometry_msgs::msg::PoseStamped>("ground_truth", 10);
+  observation_publisher_ = this->create_publisher<nav_sim_msgs::msg::LandmarkInfoArray>("observation", 10);
   odometry_publisher_ = this->create_publisher<nav_msgs::msg::Odometry>("odom", 10);
-  landmark_info_publisher_ =
-    this->create_publisher<visualization_msgs::msg::MarkerArray>("landmark_info", 1);
-  current_pose_publisher_ =
-    this->create_publisher<geometry_msgs::msg::PoseStamped>("current_pose", 10);
+  landmark_info_publisher_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("landmark_info", 1);
+  current_pose_publisher_ = this->create_publisher<geometry_msgs::msg::PoseStamped>("current_pose", 10);
+  current_pose_with_covariance_publisher_ =
+    this->create_publisher<geometry_msgs::msg::PoseWithCovarianceStamped>("current_pose_with_covariance", 10);
   path_publisher_ = this->create_publisher<nav_msgs::msg::Path>("landmark_path", 10);
-  obstacle_cloud_publisher_ =
-    this->create_publisher<sensor_msgs::msg::PointCloud2>("obstacle_points", 10);
+  obstacle_cloud_publisher_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("obstacle_points", 10);
 
   cmd_vel_subscriber_ = this->create_subscription<geometry_msgs::msg::Twist>(
     "/cmd_vel", 1, std::bind(&NavSim::callbackCmdVel, this, std::placeholders::_1));
-  initialpose_subscriber_ =
-    this->create_subscription<geometry_msgs::msg::PoseWithCovarianceStamped>(
-      "/initialpose", 1, std::bind(&NavSim::callbackInitialpose, this, std::placeholders::_1));
-  initialpose_obstacle_subscriber_ =
-    this->create_subscription<geometry_msgs::msg::PoseWithCovarianceStamped>(
-      "/initialpose_obstacle", 1,
-      std::bind(&NavSim::callbackInitialPoseObstacleInfo, this, std::placeholders::_1));
+  initialpose_subscriber_ = this->create_subscription<geometry_msgs::msg::PoseWithCovarianceStamped>(
+    "/initialpose", 1, std::bind(&NavSim::callbackInitialpose, this, std::placeholders::_1));
+  initialpose_obstacle_subscriber_ = this->create_subscription<geometry_msgs::msg::PoseWithCovarianceStamped>(
+    "/initialpose_obstacle", 1, std::bind(&NavSim::callbackInitialPoseObstacleInfo, this, std::placeholders::_1));
 
   broadcaster_ = std::make_shared<tf2_ros::TransformBroadcaster>(this);
 
   landmark_pose_list_ = parseYaml(config_);
 
   timer_ = create_wall_timer(
-    std::chrono::milliseconds(static_cast<int>(1000 * period_)),
-    std::bind(&NavSim::timerCallback, this));
+    std::chrono::milliseconds(static_cast<int>(1000 * period_)), std::bind(&NavSim::timerCallback, this));
 
   current_stamp_ = rclcpp::Clock().now();
   previous_time_ = current_stamp_.seconds();
@@ -105,14 +95,12 @@ void NavSim::observation(std::vector<Landmark> landmark_queue)
                                  map_to_landmark.getOrigin().x() - map_to_base.getOrigin().x()) -
                                current_state_.yaw_;
     // ランドマークの位置を極座標系で計算する
-    const double diff_deg =
-      normalizeDegree((diff_landmark_yaw * 180.0 / M_PI));  // normalize angle -180~180
-    const double distance = std::sqrt(
-      std::pow(base_to_landmark.getOrigin().x(), 2) +
-      std::pow(base_to_landmark.getOrigin().y(), 2));
+    const double diff_deg = normalizeDegree((diff_landmark_yaw * 180.0 / M_PI));  // normalize angle -180~180
+    const double distance =
+      std::sqrt(std::pow(base_to_landmark.getOrigin().x(), 2) + std::pow(base_to_landmark.getOrigin().y(), 2));
     // 観測情報に対して雑音を乗せる(雑音->バイアス)
-    const auto result = noise_ptr_->observationBias(
-      noise_ptr_->observationNoise(std::make_pair(distance, diff_deg * M_PI / 180.0)));
+    const auto result =
+      noise_ptr_->observationBias(noise_ptr_->observationNoise(std::make_pair(distance, diff_deg * M_PI / 180.0)));
     // 極座標から直交座標に変換する(可視化のため)
     const double base_to_landmark_x_with_noise = result.first * std::cos(result.second);
     const double base_to_landmark_y_with_noise = result.first * std::sin(result.second);
@@ -178,12 +166,13 @@ State NavSim::motion(const double vel, const double omega, const double dt, Stat
 }
 
 void NavSim::decision(
-  State & state, geometry_msgs::msg::PoseStamped & pose, double v, double w, std::string frame_id,
-  rclcpp::Time stamp, double sampling_time, bool error)
+  State& state, geometry_msgs::msg::PoseStamped& pose, double v, double w, std::string frame_id, rclcpp::Time stamp,
+  double sampling_time, bool error)
 {
   state = motion(v, w, sampling_time, state);
 
-  if (error) noise_ptr_->noise(state, cmd_vel_, sampling_time);
+  if (error)
+    noise_ptr_->noise(state, cmd_vel_, sampling_time);
 
   pose = convertToPose<State>(state);
   pose.header.stamp = stamp;
@@ -199,12 +188,16 @@ void NavSim::timerCallback()
 
   // move as ground truth
   decision(
-    ground_truth_, ground_truth_pose_, cmd_vel_.linear.x, cmd_vel_.angular.z, "ground_truth",
-    current_stamp_, sampling_time, false);
+    ground_truth_, ground_truth_pose_, cmd_vel_.linear.x, cmd_vel_.angular.z, "ground_truth", current_stamp_,
+    sampling_time, false);
   // move as current pose with error
   decision(
-    current_state_, current_pose_, noise_ptr_->bias(cmd_vel_.linear.x),
-    noise_ptr_->bias(cmd_vel_.angular.z), "base_link", current_stamp_, sampling_time, true);
+    current_state_, current_pose_, noise_ptr_->bias(cmd_vel_.linear.x), noise_ptr_->bias(cmd_vel_.angular.z),
+    "base_link", current_stamp_, sampling_time, true);
+
+  current_pose_with_covariance_.header = current_pose_.header;
+  current_pose_with_covariance_.pose.pose = current_pose_.pose;
+  current_pose_with_covariance_.pose.covariance = covariance_;
 
   // publish current velocity
   geometry_msgs::msg::TwistStamped twist;
@@ -218,14 +211,14 @@ void NavSim::timerCallback()
 
   // publish ground truth / current pose;
   current_pose_publisher_->publish(current_pose_);
+  current_pose_with_covariance_publisher_->publish(current_pose_with_covariance_);
   ground_truth_publisher_->publish(ground_truth_pose_);
 
   // publish obstacle cloud
   if (!obstacle_cloud_->points.empty()) {
     pcl::PointCloud<pcl::PointXYZ>::Ptr transformed_cloud(new pcl::PointCloud<pcl::PointXYZ>);
     tf2::Transform map2obstacle, base2obstacle, base2map;
-    transformPointCloud(
-      obstacle_cloud_, transformed_cloud, getTransform("base_link", "map", current_stamp_));
+    transformPointCloud(obstacle_cloud_, transformed_cloud, getTransform("base_link", "map", current_stamp_));
     sensor_msgs::msg::PointCloud2 obstacle_points_msg;
     pcl::toROSMsg(*transformed_cloud, obstacle_points_msg);
     obstacle_points_msg.header.stamp = current_stamp_;
@@ -254,8 +247,7 @@ void NavSim::clearMarker()
   landmark_info_publisher_->publish(markers);
 }
 
-void NavSim::updateBasePose(
-  const geometry_msgs::msg::PoseWithCovarianceStamped pose_with_covariance, State & state)
+void NavSim::updateBasePose(const geometry_msgs::msg::PoseWithCovarianceStamped pose_with_covariance, State& state)
 {
   state.x_ = pose_with_covariance.pose.pose.position.x;
   state.y_ = pose_with_covariance.pose.pose.position.y;
@@ -268,14 +260,13 @@ void NavSim::updateBasePose(
   state.yaw_ = yaw;
 }
 
-void NavSim::callbackInitialpose(const geometry_msgs::msg::PoseWithCovarianceStamped & msg)
+void NavSim::callbackInitialpose(const geometry_msgs::msg::PoseWithCovarianceStamped& msg)
 {
   updateBasePose(msg, current_state_);
   updateBasePose(msg, ground_truth_);
 }
 
-void NavSim::createObstacleCloud(
-  const geometry_msgs::msg::Pose pose, pcl::PointCloud<pcl::PointXYZ>::Ptr & cloud_ptr)
+void NavSim::createObstacleCloud(const geometry_msgs::msg::Pose pose, pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud_ptr)
 {
   cloud_ptr->header.frame_id = "map";
   const int res = obstacle_radius_ * 60;
@@ -289,8 +280,7 @@ void NavSim::createObstacleCloud(
   }
 }
 
-void NavSim::callbackInitialPoseObstacleInfo(
-  const geometry_msgs::msg::PoseWithCovarianceStamped & msg)
+void NavSim::callbackInitialPoseObstacleInfo(const geometry_msgs::msg::PoseWithCovarianceStamped& msg)
 {
   pcl::PointCloud<pcl::PointXYZ>::Ptr obstacle_cloud_ptr(new pcl::PointCloud<pcl::PointXYZ>);
   createObstacleCloud(msg.pose.pose, obstacle_cloud_ptr);
@@ -299,8 +289,7 @@ void NavSim::callbackInitialPoseObstacleInfo(
   *obstacle_cloud_ += *obstacle_cloud_ptr;
 }
 
-void NavSim::publishTransform(
-  const geometry_msgs::msg::PoseStamped pose, const std::string child_frame_id)
+void NavSim::publishTransform(const geometry_msgs::msg::PoseStamped pose, const std::string child_frame_id)
 {
   geometry_msgs::msg::TransformStamped base_link_transform;
 
@@ -318,21 +307,20 @@ void NavSim::publishTransform(
   broadcaster_->sendTransform(base_link_transform);
 }
 
-geometry_msgs::msg::TransformStamped NavSim::getTransform(
-  const std::string target_frame, const std::string source_frame, const rclcpp::Time stamp)
+geometry_msgs::msg::TransformStamped
+NavSim::getTransform(const std::string target_frame, const std::string source_frame, const rclcpp::Time stamp)
 {
   geometry_msgs::msg::TransformStamped frame_transform;
   try {
-    frame_transform =
-      tf_buffer_.lookupTransform(target_frame, source_frame, stamp, tf2::durationFromSec(0.5));
-  } catch (tf2::TransformException & ex) {
+    frame_transform = tf_buffer_.lookupTransform(target_frame, source_frame, stamp, tf2::durationFromSec(0.5));
+  } catch (tf2::TransformException& ex) {
     RCLCPP_ERROR(get_logger(), "%s", ex.what());
   }
   return frame_transform;
 }
 
 void NavSim::transformPointCloud(
-  pcl::PointCloud<pcl::PointXYZ>::Ptr input_ptr, pcl::PointCloud<pcl::PointXYZ>::Ptr & output_ptr,
+  pcl::PointCloud<pcl::PointXYZ>::Ptr input_ptr, pcl::PointCloud<pcl::PointXYZ>::Ptr& output_ptr,
   const geometry_msgs::msg::TransformStamped frame_transform)
 {
   const Eigen::Affine3d frame_affine = tf2::transformToEigen(frame_transform);
