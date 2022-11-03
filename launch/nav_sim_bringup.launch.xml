@@ -1,21 +1,16 @@
 <launch>
   <arg name="rviz" default="true"/>
   <arg name="rviz_config" default="$(find-pkg-share nav_sim)/rviz/nav_sim.rviz"/>
-  <arg name="error_coeff" default="0.0002"/>
-  <arg name="limit_view_angle" default="65.0"/>
   <arg name="config" default="$(find-pkg-share nav_sim)/config/landmark_config.yaml"/>
-  <arg name="obstacle_radius" default="0.3"/>
+  <arg name="nav_sim_param" default="$(find-pkg-share nav_sim)/config/nav_sim.param.yaml"/>
 
   <node name="world_to_map" pkg="tf2_ros" exec="static_transform_publisher" args="0 0 0 0 0 0 world map"/>
 
   <node name="nav_sim" pkg="nav_sim" exec="nav_sim_node">
-    <param name="error_coeff" value="$(var error_coeff)"/>
-    <param name="limit_view_angle" value="$(var limit_view_angle)"/>
-    <param name="obstacle_radius" value="$(var obstacle_radius)"/>
     <param name="config" value="$(var config)"/>
+    <param from="$(var nav_sim_param)"/>
   </node>
 
-  <node name="teleop_twist_keyboard" pkg="teleop_twist_keyboard" exec="teleop_twist_keyboard"/>
   <group if="$(var rviz)">
     <node name="rviz2" pkg="rviz2" exec="rviz2" args="-d $(var rviz_config)"/>
   </group>
