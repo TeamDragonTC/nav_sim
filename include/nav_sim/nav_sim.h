@@ -15,6 +15,7 @@
 #include <cmath>
 #include <mutex>
 #include <random>
+#include <std_msgs/msg/detail/bool__struct.hpp>
 
 #ifdef USE_TF2_GEOMETRY_MSGS_DEPRECATED_HEADER
 #include <tf2_eigen/tf2_eigen.h>
@@ -28,6 +29,7 @@
 #include <pcl_ros/transforms.hpp>
 #include <rclcpp/rclcpp.hpp>
 
+#include <std_msgs/msg/bool.hpp>
 #include <geometry_msgs/msg/pose_stamped.hpp>
 #include <geometry_msgs/msg/pose_with_covariance_stamped.hpp>
 #include <geometry_msgs/msg/transform_stamped.hpp>
@@ -84,6 +86,7 @@ public:
   {
     cmd_vel_ = msg;
   }
+  void callbackClearCmd(const std_msgs::msg::Bool& msg);
   void callbackInitialpose(const geometry_msgs::msg::PoseWithCovarianceStamped& msg);
   void callbackInitialPoseObstacleInfo(const geometry_msgs::msg::PoseWithCovarianceStamped& msg);
   void timerCallback();
@@ -136,6 +139,7 @@ private:
   rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_subscriber_;
   rclcpp::Subscription<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr initialpose_subscriber_;
   rclcpp::Subscription<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr initialpose_obstacle_subscriber_;
+  rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr clear_cmd_subscriber_;
 };
 
 #endif
