@@ -35,6 +35,8 @@ NavSim::NavSim() : Node("nav_sim")
   path_publisher_ = this->create_publisher<nav_msgs::msg::Path>("landmark_path", 10);
   obstacle_cloud_publisher_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("obstacle_points", 10);
 
+  clear_cmd_subscriber_ = this->create_subscription<std_msgs::msg::Bool>(
+    "clear_cmd", 1, std::bind(&NavSim::callbackClearCmd, this, std::placeholders::_1));
   cmd_vel_subscriber_ = this->create_subscription<geometry_msgs::msg::Twist>(
     "/cmd_vel", 1, std::bind(&NavSim::callbackCmdVel, this, std::placeholders::_1));
   initialpose_subscriber_ = this->create_subscription<geometry_msgs::msg::PoseWithCovarianceStamped>(
@@ -215,16 +217,18 @@ void NavSim::timerCallback()
   ground_truth_publisher_->publish(ground_truth_pose_);
 
   // publish obstacle cloud
+  pcl::PointCloud<pcl::PointXYZ>::Ptr transformed_cloud(new pcl::PointCloud<pcl::PointXYZ>);
   if (!obstacle_cloud_->points.empty()) {
-    pcl::PointCloud<pcl::PointXYZ>::Ptr transformed_cloud(new pcl::PointCloud<pcl::PointXYZ>);
     tf2::Transform map2obstacle, base2obstacle, base2map;
     transformPointCloud(obstacle_cloud_, transformed_cloud, getTransform("base_link", "map", current_stamp_));
-    sensor_msgs::msg::PointCloud2 obstacle_points_msg;
-    pcl::toROSMsg(*transformed_cloud, obstacle_points_msg);
-    obstacle_points_msg.header.stamp = current_stamp_;
-    obstacle_points_msg.header.frame_id = "base_link";
-    obstacle_cloud_publisher_->publish(obstacle_points_msg);
+  } else {
+    transformed_cloud = obstacle_cloud_;
   }
+  sensor_msgs::msg::PointCloud2 obstacle_points_msg;
+  pcl::toROSMsg(*transformed_cloud, obstacle_points_msg);
+  obstacle_points_msg.header.stamp = current_stamp_;
+  obstacle_points_msg.header.frame_id = "base_link";
+  obstacle_cloud_publisher_->publish(obstacle_points_msg);
   // publish odometry
   nav_msgs::msg::Odometry odom = convertToOdometry(current_pose_);
   odom.header.stamp = current_stamp_;
@@ -232,6 +236,13 @@ void NavSim::timerCallback()
   odometry_publisher_->publish(odom);
 
   previous_time_ = current_time;
+}
+
+void NavSim::callbackClearCmd(const std_msgs::msg::Bool& msg)
+{
+  if (msg.data) {
+    obstacle_cloud_->clear();
+  }
 }
 
 void NavSim::clearMarker()
