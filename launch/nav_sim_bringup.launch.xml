@@ -9,6 +9,7 @@
   <node name="nav_sim" pkg="nav_sim" exec="nav_sim_node" output="screen">
     <param name="config" value="$(var config)"/>
     <param from="$(var nav_sim_param)"/>
+    <remap from="obstacle_points" to="velodyne_points"/>
     <remap from="current_pose" to="/localization/pose"/>
     <remap from="current_pose_with_covariance" to="/localization/pose_with_covariance"/>
   </node>

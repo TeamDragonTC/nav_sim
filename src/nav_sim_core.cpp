@@ -281,13 +281,15 @@ void NavSim::createObstacleCloud(const geometry_msgs::msg::Pose pose, pcl::Point
 {
   cloud_ptr->header.frame_id = "map";
   const int res = obstacle_radius_ * 60;
-  for (int j = 0; j < res; j++) {
-    pcl::PointXYZ point;
-    const double radian = 2.0 * M_PI * j / res;
-    point.x = obstacle_radius_ * std::cos(radian) + pose.position.x;
-    point.y = obstacle_radius_ * std::sin(radian) + pose.position.y;
-    point.z = pose.position.z;
-    cloud_ptr->points.emplace_back(point);
+  for (double z = 0.0; z < 1.0; z += 0.1) {
+    for (int j = 0; j < res; j++) {
+      pcl::PointXYZ point;
+      const double radian = 2.0 * M_PI * j / res;
+      point.x = obstacle_radius_ * std::cos(radian) + pose.position.x;
+      point.y = obstacle_radius_ * std::sin(radian) + pose.position.y;
+      point.z = pose.position.z + z;
+      cloud_ptr->points.emplace_back(point);
+    }
   }
 }
 
